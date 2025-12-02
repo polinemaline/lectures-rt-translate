@@ -1,0 +1,12 @@
+# backend/pyproject.toml
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+extend-exclude = "migrations/"
+
+[tool.isort]
+profile = "black"
+line_length = 88
+known_first_party = "app"
+skip = [".venv", "migrations", "build", "dist", "__pycache__"]
+include_trailing_comma = true

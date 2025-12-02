@@ -1,0 +1,49 @@
+# Node / Frontend
+node_modules/
+dist/
+dist-ssr/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Python / Backend
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+.env
+venv/
+.env.local
+instance/
+.DS_Store
+
+# Docker
+*.env
+*.env.local
+docker-compose.override.yml
+# Volume data (если появятся)
+data/
+db_data/
+
+# Logs
+logs/
+*.log
+
+# IDE / Editor configs
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Python virtualenvs
+.venv/
+backend/.venv/

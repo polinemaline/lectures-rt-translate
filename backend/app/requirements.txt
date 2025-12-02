@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+python-multipart
+aiofiles
+pydantic[dotenv]
+SQLAlchemy>=2.0
+asyncpg
+alembic
+psycopg2-binary
+pydantic-settings
+faster-whisper
+numpy
+passlib[bcrypt]
+email-validator

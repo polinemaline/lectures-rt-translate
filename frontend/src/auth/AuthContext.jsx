@@ -1,79 +1,96 @@
-import { createContext, useContext, useEffect, useState } from "react";
+// frontend/src/auth/AuthContext.jsx
+import React, { createContext, useContext, useEffect, useState } from "react";
 
 const AuthContext = createContext(null);
 
 const API_BASE = "http://localhost:8000/api";
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null); // {id, email, full_name}
+  const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
-  const [loading, setLoading] = useState(true);
 
+  // поднимаем состояние из localStorage (если уже логинились)
   useEffect(() => {
-    const stored = localStorage.getItem("auth");
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        setUser(parsed.user);
-        setToken(parsed.token);
-      } catch {
-        // ignore
-      }
+    const saved = localStorage.getItem("auth");
+    if (!saved) return;
+    try {
+      const parsed = JSON.parse(saved);
+      setUser(parsed.user || null);
+      setToken(parsed.token || null);
+    } catch {
+      // если вдруг мусор — игнорируем
     }
-    setLoading(false);
   }, []);
 
-  const login = async ({ email, password }) => {
+  const saveAuth = (nextUser, nextToken) => {
+    setUser(nextUser);
+    setToken(nextToken);
+    if (nextUser && nextToken) {
+      localStorage.setItem(
+        "auth",
+        JSON.stringify({ user: nextUser, token: nextToken })
+      );
+    } else {
+      localStorage.removeItem("auth");
+    }
+  };
+
+  const login = async (email, password) => {
     const res = await fetch(`${API_BASE}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
 
+    const data = await res.json().catch(() => ({}));
+
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || "Не удалось выполнить вход");
+      const msg =
+        (Array.isArray(data?.detail) && data.detail[0]?.msg) ||
+        data?.detail ||
+        "Не удалось войти";
+      throw new Error(msg);
     }
 
-    const data = await res.json();
-    const authData = { user: data.user, token: data.token };
-    localStorage.setItem("auth", JSON.stringify(authData));
-    setUser(data.user);
-    setToken(data.token);
+    saveAuth(data.user, data.token);
   };
 
-  const register = async ({ email, password, password_confirm }) => {
+  const register = async (email, password, passwordConfirm, fullName) => {
     const res = await fetch(`${API_BASE}/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         email,
         password,
-        password_confirm,
+        password_confirm: passwordConfirm,
+        full_name: fullName,
       }),
     });
 
+    const data = await res.json().catch(() => ({}));
+
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || "Не удалось зарегистрироваться");
+      const msg =
+        (Array.isArray(data?.detail) && data.detail[0]?.msg) ||
+        data?.detail ||
+        "Не удалось зарегистрироваться";
+      throw new Error(msg);
     }
   };
 
   const logout = () => {
-    localStorage.removeItem("auth");
-    setUser(null);
-    setToken(null);
+    saveAuth(null, null);
   };
 
-  return (
-    <AuthContext.Provider
-      value={{ user, token, loading, login, register, logout }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
+  const value = { user, token, login, register, logout };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
-  return useContext(AuthContext);
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error("useAuth must be used внутри AuthProvider");
+  }
+  return ctx;
 }

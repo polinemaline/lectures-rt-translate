@@ -8,6 +8,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+.vite/
+.env
 
 # Python / Backend
 __pycache__/
@@ -21,6 +23,8 @@ venv/
 .env.local
 instance/
 .DS_Store
+uploads/
+alembic/__pycache__/
 
 # Docker
 *.env

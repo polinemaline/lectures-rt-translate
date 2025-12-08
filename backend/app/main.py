@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import router as api_router
 from app.api_auth import router as auth_router
+from app.api_conferences import router as conferences_router
 from app.api_lectures import router as lectures_router
 
 app = FastAPI(title="Lectures RT Translate")
@@ -30,4 +31,5 @@ async def health():
 
 app.include_router(api_router, prefix="/api")
 app.include_router(auth_router, prefix="/api/auth")
-app.include_router(lectures_router, prefix="/api/lectures")
+app.include_router(lectures_router, prefix="/api")
+app.include_router(conferences_router, prefix="/api")

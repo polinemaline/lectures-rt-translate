@@ -1,17 +1,18 @@
-# frontend/Dockerfile  (править в папке frontend)
+# build-этап
 FROM node:20-bookworm-slim AS build
 WORKDIR /app
 
-# сначала только манифесты — чтобы кешировалось
 COPY package*.json ./
 RUN npm ci
 
-# затем исходники
 COPY . .
 RUN npm run build
 
-# runtime: nginx
+# runtime-этап
 FROM nginx:stable-alpine
+
+# кладём собранный фронт
 COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+
+# подменяем дефолтный конфиг nginx нашим SPA-конфигом
+COPY nginx.conf /etc/nginx/conf.d/default.conf

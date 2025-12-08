@@ -1,8 +1,6 @@
 # app/api_auth.py
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from passlib.context import CryptContext
-from passlib.exc import UnknownHashError  # у тебя уже должен быть этот импорт
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,13 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_session
 from app.models import User
 
-router = APIRouter(tags=["auth"])
-
-
-pwd_context = CryptContext(
-    schemes=["pbkdf2_sha256"],
-    deprecated="auto",
-)
+router = APIRouter(tags=["auth"])  # <--- БЕЗ prefix="/auth"!
 
 
 # ---------- Pydantic-схемы ----------
@@ -34,19 +26,35 @@ class LoginRequest(BaseModel):
     password: str
 
 
-# ---------- Вспомогательные функции ----------
+class UserOut(BaseModel):
+    id: int
+    email: EmailStr
+    full_name: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class LoginResponse(BaseModel):
+    user: UserOut
+    token: str  # пока фейковый
+
+
+# ---------- "Хеширование" пароля (наш простой вариант) ----------
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    # простой вариант, без bcrypt
+    import hashlib
+
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    try:
-        return pwd_context.verify(password, password_hash)
-    except UnknownHashError:
-        # если хэш неизвестного формата — считаем, что пароль неверный
-        return False
+    import hmac
+
+    calc = hash_password(password)
+    return hmac.compare_digest(calc, password_hash)
 
 
 # ---------- Эндпоинты ----------
@@ -57,12 +65,14 @@ async def register_user(
     payload: RegisterRequest,
     session: AsyncSession = Depends(get_session),
 ):
+    # 1. пароли совпадают?
     if payload.password != payload.password_confirm:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Пароли не совпадают",
         )
 
+    # 2. проверяем уникальность email
     result = await session.execute(select(User).where(User.email == payload.email))
     existing = result.scalar_one_or_none()
     if existing:
@@ -83,7 +93,7 @@ async def register_user(
     return {"message": "registered"}
 
 
-@router.post("/login")
+@router.post("/login", response_model=LoginResponse)
 async def login_user(
     payload: LoginRequest,
     session: AsyncSession = Depends(get_session),
@@ -99,12 +109,4 @@ async def login_user(
 
     token = f"mock-token-{user.id}"
 
-    # Возвращаем простой словарь, без Pydantic-модели
-    return {
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "full_name": user.full_name,
-        },
-        "token": token,
-    }
+    return LoginResponse(user=user, token=token)

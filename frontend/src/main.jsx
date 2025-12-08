@@ -9,7 +9,9 @@ import { LoginPage } from "./pages/LoginPage";
 import { AppLayout } from "./components/AppLayout";
 import { ConferencesPage } from "./pages/ConferencesPage";
 import { NotesPage } from "./pages/NotesPage";
-import { UploadPage } from "./pages/UploadPage";
+import { UploadsPage } from "./pages/UploadsPage";
+import { ProfilePage } from "./pages/ProfilePage";
+
 
 function Root() {
   const { user } = useAuth();
@@ -26,7 +28,8 @@ function Root() {
       <Routes>
         <Route path="/" element={<ConferencesPage />} />
         <Route path="/notes" element={<NotesPage />} />
-        <Route path="/uploads" element={<UploadPage />} />
+        <Route path="/uploads" element={<UploadsPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
       </Routes>
     </AppLayout>
   );

@@ -25,7 +25,10 @@ export function LoginPage() {
     try {
       if (mode === "login") {
         await login(email, password);
-        // контекст обновится, Root-компонент сам покажет основное приложение
+        // ВАЖНО:
+        // Ничего не навигируем отсюда.
+        // AuthContext поставит user, Root пересоберётся
+        // и покажет ConferencesPage.
         return;
       }
 

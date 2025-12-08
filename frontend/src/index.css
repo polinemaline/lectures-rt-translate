@@ -151,3 +151,477 @@ body {
 .auth-link:hover {
   text-decoration: underline;
 }
+/* ---------- Страница профиля пользователя ---------- */
+
+.profile-page {
+  min-height: calc(100vh - 64px);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 40px 16px;
+}
+
+.profile-card {
+  position: relative;
+  max-width: 520px;
+  width: 100%;
+  background: rgba(15, 23, 42, 0.95);
+  border-radius: 20px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.65);
+  padding: 28px 24px 24px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+}
+
+.profile-title {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #e5e7eb;
+}
+
+.profile-subtitle {
+  font-size: 14px;
+  color: #9ca3af;
+  margin-bottom: 20px;
+}
+
+.profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.profile-avatar-block {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.profile-avatar-preview {
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
+  background: #111827;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 24px;
+  color: #e5e7eb;
+  overflow: hidden;
+}
+
+.profile-avatar-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-avatar-label {
+  display: inline-flex;
+  align-items: center;
+}
+
+.profile-avatar-button {
+  display: inline-flex;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #020617;
+  color: #f9fafb;
+  font-size: 14px;
+  cursor: pointer;
+  border: 1px solid #4b5563;
+}
+
+.profile-avatar-input {
+  display: none;
+}
+
+.profile-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-label {
+  font-size: 13px;
+  color: #d1d5db;
+}
+
+.profile-input {
+  border-radius: 10px;
+  border: 1px solid #4b5563;
+  padding: 8px 10px;
+  font-size: 14px;
+  background: #020617;
+  color: #e5e7eb;
+}
+
+.profile-input:disabled {
+  background: #020617;
+  color: #6b7280;
+}
+
+.profile-save-button {
+  margin-top: 4px;
+  width: 100%;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+}
+
+.profile-save-button:hover {
+  background: #1d4ed8;
+}
+
+.profile-message {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #bbf7d0;
+}
+
+/* кнопка-крестик закрытия профиля */
+.profile-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.profile-close:hover {
+  background: rgba(15, 23, 42, 0.7);
+  color: #e5e7eb;
+}
+/* ---------- Страница "Конференции" ---------- */
+
+.conferences-page {
+  padding: 32px 24px 40px;
+}
+
+.conferences-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 24px;
+}
+
+.conferences-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.conferences-user {
+  font-size: 14px;
+  color: #9ca3af;
+}
+
+.conferences-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+}
+
+@media (min-width: 900px) {
+  .conferences-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.conference-card {
+  background: rgba(15, 23, 42, 0.95);
+  border-radius: 18px;
+  padding: 20px 18px 18px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.6);
+}
+
+.conference-card-title {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.conference-card-subtitle {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: #9ca3af;
+}
+
+.conference-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.conference-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.conference-label {
+  font-size: 13px;
+  color: #d1d5db;
+}
+
+.conference-input {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #4b5563;
+  background: #020617;
+  color: #e5e7eb;
+  font-size: 14px;
+}
+
+.conference-input::placeholder {
+  color: #6b7280;
+}
+
+.conference-input:focus {
+  outline: 2px solid #6366f1;
+  outline-offset: 1px;
+  border-color: #6366f1;
+}
+
+.conference-primary-btn {
+  margin-top: 6px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: #f9fafb;
+  background: linear-gradient(90deg, #6366f1, #a855f7);
+  box-shadow: 0 8px 18px rgba(79, 70, 229, 0.55);
+  transition: transform 0.1s ease, box-shadow 0.1s ease, opacity 0.15s ease;
+}
+
+.conference-primary-btn:hover {
+  opacity: 0.96;
+  transform: translateY(-1px);
+}
+
+.conference-primary-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 10px rgba(79, 70, 229, 0.55);
+}
+
+.conference-secondary-btn {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid #4b5563;
+  background: #020617;
+  color: #e5e7eb;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.conference-secondary-btn:hover {
+  background: #111827;
+}
+
+.conference-code-block {
+  margin-top: 4px;
+  padding: 10px 10px 8px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px dashed #4b5563;
+}
+
+.conference-code-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+  align-items: center;
+}
+
+.conference-code-box {
+  flex: 1;
+  border-radius: 999px;
+  padding: 7px 12px;
+  background: #020617;
+  border: 1px solid #4b5563;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+    monospace;
+  letter-spacing: 0.08em;
+  font-size: 13px;
+  text-align: center;
+}
+
+.conference-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.conference-message {
+  margin: 2px 0 0;
+  font-size: 13px;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+.conference-message_error {
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.35);
+  border: 1px solid rgba(248, 113, 113, 0.7);
+}
+
+.conference-message_success {
+  color: #bbf7d0;
+  background: rgba(22, 101, 52, 0.35);
+  border: 1px solid rgba(52, 211, 153, 0.7);
+}
+/* ---------- Лэйаут приложения (topbar + контент) ---------- */
+
+/* ---------- Лэйаут приложения (topbar + sidebar + контент) ---------- */
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* верхняя панель только с аватаром и почтой */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.9);
+  background: linear-gradient(
+    to right,
+    rgba(15, 23, 42, 0.98),
+    rgba(15, 23, 42, 0.9)
+  );
+  backdrop-filter: blur(16px);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.app-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-header-user-name {
+  font-size: 14px;
+  color: #e5e7eb;
+}
+
+/* аватар в шапке */
+
+.app-header-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: #111827;
+  border: 1px solid #4b5563;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f9fafb;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  overflow: hidden;
+}
+
+.app-header-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.app-logout-btn {
+  border-radius: 999px;
+  border: 1px solid #4b5563;
+  background: transparent;
+  color: #e5e7eb;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.app-logout-btn:hover {
+  background: #111827;
+}
+
+/* тело: sidebar + контент */
+
+.app-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* левый сайдбар */
+
+.app-sidebar {
+  width: 210px;
+  padding: 20px 16px;
+  background: radial-gradient(circle at top left, #020617 0, #020617 40%, #000 100%);
+  border-right: 1px solid rgba(15, 23, 42, 0.9);
+}
+
+.app-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.app-sidebar-link {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #9ca3af;
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.app-sidebar-link:hover {
+  background: rgba(15, 23, 42, 0.95);
+  color: #e5e7eb;
+}
+
+.app-sidebar-link_active {
+  background: linear-gradient(90deg, #6366f1, #a855f7);
+  color: #f9fafb;
+}
+
+/* основной контент справа от сайдбара */
+
+.app-main {
+  flex: 1;
+  padding: 24px;
+  min-width: 0;
+}

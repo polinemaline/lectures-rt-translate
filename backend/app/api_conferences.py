@@ -1,80 +1,71 @@
-# app/api_conferences.py
+# backend/app/api_conferences.py
 
-from __future__ import annotations
-
-import uuid
-from typing import Dict
+import random
+import string
+from typing import List
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/conferences", tags=["conferences"])
 
-# ---------- Pydantic-схемы ----------
+
+class Conference(BaseModel):
+    id: int
+    code: str
+    title: str
 
 
-class CreateConferenceRequest(BaseModel):
+class CreateConferencePayload(BaseModel):
     title: str
 
 
-class JoinConferenceRequest(BaseModel):
+class JoinConferencePayload(BaseModel):
     code: str
 
 
-class ConferenceInfo(BaseModel):
-    id: str
-    code: str
-    title: str
-    is_organizer: bool
+# Пространство хранения конференций в памяти процесса
+_conferences: List[Conference] = []
+_next_id = 1
 
 
-# ---------- Простое in-memory "хранилище" ----------
-
-# ключ — код конференции (верхний регистр),
-# значение — словарь с базовой инфой.
-_CONFERENCES: Dict[str, Dict[str, str]] = {}
+def _generate_code(length: int = 8) -> str:
+    alphabet = string.ascii_uppercase + string.digits
+    return "".join(random.choice(alphabet) for _ in range(length))
 
 
-def _generate_code() -> str:
-    """Генерируем короткий код конференции."""
-    return uuid.uuid4().hex[:8].upper()
+@router.post("/create", response_model=Conference)
+def create_conference(payload: CreateConferencePayload) -> Conference:
+    global _next_id
 
-
-# ---------- Эндпоинты ----------
-
-
-@router.post("/create", response_model=ConferenceInfo)
-async def create_conference(payload: CreateConferenceRequest) -> ConferenceInfo:
-    if not payload.title.strip():
+    title = payload.title.strip()
+    if not title:
         raise HTTPException(
             status_code=400, detail="Название конференции не может быть пустым"
         )
 
-    conf_id = str(uuid.uuid4())
+    # генерируем уникальный код
+    existing_codes = {c.code for c in _conferences}
     code = _generate_code()
+    while code in existing_codes:
+        code = _generate_code()
 
-    data = {
-        "id": conf_id,
-        "code": code,
-        "title": payload.title.strip(),
-    }
-    _CONFERENCES[code] = data
-
-    return ConferenceInfo(**data, is_organizer=True)
+    conf = Conference(id=_next_id, code=code, title=title)
+    _next_id += 1
+    _conferences.append(conf)
+    return conf
 
 
-@router.post("/join", response_model=ConferenceInfo)
-async def join_conference(payload: JoinConferenceRequest) -> ConferenceInfo:
+@router.post("/join", response_model=Conference)
+def join_conference(payload: JoinConferencePayload) -> Conference:
     code = payload.code.strip().upper()
     if not code:
         raise HTTPException(
             status_code=400, detail="Код конференции не может быть пустым"
         )
 
-    data = _CONFERENCES.get(code)
-    if not data:
-        raise HTTPException(
-            status_code=404, detail="Конференция с таким кодом не найдена"
-        )
+    for conf in _conferences:
+        if conf.code == code:
+            return conf
 
-    return ConferenceInfo(**data, is_organizer=False)
+    raise HTTPException(status_code=404, detail="Конференция с таким кодом не найдена")

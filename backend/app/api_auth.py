@@ -110,3 +110,41 @@ async def login_user(
     token = f"mock-token-{user.id}"
 
     return LoginResponse(user=user, token=token)
+
+
+# app/api_auth.py
+from fastapi import Header
+from sqlalchemy import select
+
+
+async def get_current_user(
+    authorization: str | None = Header(default=None),
+    session: AsyncSession = Depends(get_session),
+) -> User:
+    """
+    Ждём заголовок:
+      Authorization: Bearer mock-token-<user_id>
+    """
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Invalid Authorization header")
+
+    token = parts[1]
+    prefix = "mock-token-"
+    if not token.startswith(prefix):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    try:
+        user_id = int(token[len(prefix) :])
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid token user id")
+
+    result = await session.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    return user

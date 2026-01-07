@@ -1,3 +1,4 @@
+# app/models.py
 from datetime import datetime
 
 from sqlalchemy import (
@@ -10,21 +11,24 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.orm import (
-    DeclarativeBase,
-    Mapped,
-    declarative_base,
-    mapped_column,
-    relationship,
-)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.base import Base
 
 
-class Base(DeclarativeBase):
-    pass
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    full_name = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=False), server_default=func.now())
 
 
 class Lecture(Base):
     __tablename__ = "lectures"
+
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     title: Mapped[str] = mapped_column(String(200))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -37,6 +41,7 @@ class Lecture(Base):
 
 class Segment(Base):
     __tablename__ = "segments"
+
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     lecture_id: Mapped[int] = mapped_column(
         ForeignKey("lectures.id", ondelete="CASCADE")
@@ -50,14 +55,57 @@ class Segment(Base):
     lecture: Mapped["Lecture"] = relationship("Lecture", back_populates="segments")
 
 
-Base = declarative_base()
-
-
-class User(Base):
-    __tablename__ = "users"
+class UploadJob(Base):
+    __tablename__ = "upload_jobs"
 
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String(255), unique=True, index=True, nullable=False)
-    password_hash = Column(String(255), nullable=False)
-    full_name = Column(String(255), nullable=True)
-    created_at = Column(DateTime(timezone=False), server_default=func.now())
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    filename = Column(String(255), nullable=False)
+    content_type = Column(String(100), nullable=False)
+
+    status = Column(
+        String(30), nullable=False, default="uploaded"
+    )  # uploaded|processing|done|error
+    stage = Column(
+        String(30), nullable=False, default="uploaded"
+    )  # extract|transcribe|translate|export|done|error
+    progress = Column(Integer, nullable=False, default=0)
+
+    src_language = Column(String(32), nullable=True)
+    target_language = Column(String(32), nullable=True)
+
+    transcript_text = Column(Text, nullable=True)
+    translated_text = Column(Text, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    user = relationship("User", backref="upload_jobs")
+
+
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy.orm import relationship
+
+
+class Note(Base):
+    __tablename__ = "notes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+
+    title = Column(String(255), nullable=False, default="Конспект")
+    original_language = Column(String(32), nullable=True)
+    target_language = Column(String(32), nullable=True)
+
+    original_text = Column(Text, nullable=False, default="")
+    translated_text = Column(Text, nullable=False, default="")
+
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    user = relationship("User", backref="notes")

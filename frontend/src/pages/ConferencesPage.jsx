@@ -1,171 +1,175 @@
 // frontend/src/pages/ConferencesPage.jsx
 import React, { useState } from "react";
-import { useAuth } from "../auth/AuthContext";
+import { useNavigate } from "react-router-dom";
+import { createConference, joinConference } from "../api/conferences";
 
 export function ConferencesPage() {
-  const { user } = useAuth();
+  const navigate = useNavigate();
 
-  const [createName, setCreateName] = useState("");
-  const [createdCode, setCreatedCode] = useState("");
+  // создание конференции
+  const [title, setTitle] = useState("");
   const [createError, setCreateError] = useState("");
-  const [createSuccess, setCreateSuccess] = useState("");
+  const [createdConference, setCreatedConference] = useState(null);
 
+  // подключение по коду
   const [joinCode, setJoinCode] = useState("");
   const [joinError, setJoinError] = useState("");
-  const [joinSuccess, setJoinSuccess] = useState("");
-
-  const resetCreateMessages = () => {
-    setCreateError("");
-    setCreateSuccess("");
-  };
-
-  const resetJoinMessages = () => {
-    setJoinError("");
-    setJoinSuccess("");
-  };
 
   const handleCreate = async (e) => {
     e.preventDefault();
-    resetCreateMessages();
+    setCreateError("");
+    setCreatedConference(null);
 
-    if (!createName.trim()) {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
       setCreateError("Введите название конференции");
       return;
     }
 
-    // здесь позже подключим реальный backend
-    const fakeCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-    setCreatedCode(fakeCode);
-    setCreateSuccess("Конференция создана. Поделитесь кодом с участниками.");
+    try {
+      // ждём от бэка объект вида { id, code, title }
+      const conf = await createConference(trimmedTitle);
+
+      setCreatedConference(conf);
+      setTitle("");
+    } catch (err) {
+      console.error("create conference error:", err);
+      setCreateError(
+        err.message || "Не удалось создать конференцию. Попробуйте ещё раз."
+      );
+    }
+  };
+
+  const handleConnectCreated = () => {
+    if (!createdConference?.code) return;
+
+    navigate(`/conference/${createdConference.code}`, {
+      state: {
+        conference: {
+          ...createdConference,
+          title: createdConference.title ?? "Конференция",
+          is_organizer: true,
+        },
+      },
+    });
   };
 
   const handleJoin = async (e) => {
     e.preventDefault();
-    resetJoinMessages();
+    setJoinError("");
 
-    if (!joinCode.trim()) {
+    const trimmed = joinCode.trim();
+    if (!trimmed) {
       setJoinError("Введите код конференции");
       return;
     }
 
-    // здесь позже будет реальная проверка кода
-    setJoinSuccess("Проверка кода прошла успешно. Можно подключаться.");
-  };
-
-  const handleCopyCode = async () => {
-    if (!createdCode) return;
     try {
-      await navigator.clipboard.writeText(createdCode);
-      setCreateSuccess("Код скопирован в буфер обмена");
-    } catch {
-      setCreateError("Не удалось скопировать код");
+      // ждём от бэка объект вида { id, code, title }
+      const conf = await joinConference(trimmed);
+
+      navigate(`/conference/${conf.code}`, {
+        state: {
+          conference: {
+            ...conf,
+            title: conf.title ?? "Конференция",
+            is_organizer: false,
+          },
+        },
+      });
+    } catch (err) {
+      console.error("join conference error:", err);
+      setJoinError(
+        err.message ||
+          "Не удалось подключиться к конференции. Проверьте код и попробуйте снова."
+      );
     }
   };
 
   return (
-    <div className="conferences-page">
-      <div className="conferences-header">
-        <h1 className="conferences-title">Конференции</h1>
-        {user?.displayName && (
-          <span className="conferences-user">
-            Вы вошли как <b>{user.displayName}</b>
-          </span>
+    <div className="page-inner">
+      <h1 className="page-title">Конференции</h1>
+
+      {/* блок "создать конференцию" */}
+      <section className="section-card">
+        <h2 className="section-card-title">Создать конференцию</h2>
+        <p className="section-card-subtitle">
+          Введите название конференции. После создания вы получите уникальный
+          код, которым сможете поделиться с участниками.
+        </p>
+
+        <form onSubmit={handleCreate} className="section-form">
+          <div className="section-field">
+            <label className="section-label">Название конференции</label>
+            <input
+              type="text"
+              className="section-input"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Например: Лекция по математике"
+            />
+          </div>
+
+          {createError && (
+            <p className="section-message section-message_error">
+              {createError}
+            </p>
+          )}
+
+          <button type="submit" className="section-button">
+            Создать конференцию
+          </button>
+        </form>
+
+        {createdConference && (
+          <div className="section-created">
+            <p className="section-created-text">
+              Конференция создана. Код:{" "}
+              <span className="section-created-code">
+                {createdConference.code}
+              </span>
+            </p>
+            <button
+              type="button"
+              className="section-button section-button_secondary"
+              onClick={handleConnectCreated}
+            >
+              Подключиться как организатор
+            </button>
+          </div>
         )}
-      </div>
+      </section>
 
-      <div className="conferences-grid">
-        {/* Создать конференцию */}
-        <section className="conference-card">
-          <h2 className="conference-card-title">Создать конференцию</h2>
-          <p className="conference-card-subtitle">
-            Введите название конференции. После создания вы получите
-            уникальный код, которым сможете поделиться с участниками.
-          </p>
+      {/* блок "подключиться к конференции" */}
+      <section className="section-card">
+        <h2 className="section-card-title">Подключиться к конференции</h2>
+        <p className="section-card-subtitle">
+          Введите код конференции, который вам сообщил организатор.
+        </p>
 
-          <form onSubmit={handleCreate} className="conference-form">
-            <div className="conference-field">
-              <label className="conference-label">Название конференции</label>
-              <input
-                type="text"
-                className="conference-input"
-                placeholder="Например: Лекция по математике"
-                value={createName}
-                onChange={(e) => setCreateName(e.target.value)}
-              />
-            </div>
+        <form onSubmit={handleJoin} className="section-form">
+          <div className="section-field">
+            <label className="section-label">Код конференции</label>
+            <input
+              type="text"
+              className="section-input"
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value)}
+              placeholder="Например: AB12CD34"
+            />
+          </div>
 
-            {createdCode && (
-              <div className="conference-code-block">
-                <span className="conference-label">Код конференции</span>
-                <div className="conference-code-row">
-                  <div className="conference-code-box">{createdCode}</div>
-                  <button
-                    type="button"
-                    className="conference-secondary-btn"
-                    onClick={handleCopyCode}
-                  >
-                    Скопировать
-                  </button>
-                </div>
-                <p className="conference-hint">
-                  Отправьте этот код участникам, чтобы они могли подключиться.
-                </p>
-              </div>
-            )}
+          {joinError && (
+            <p className="section-message section-message_error">
+              {joinError}
+            </p>
+          )}
 
-            {createError && (
-              <p className="conference-message conference-message_error">
-                {createError}
-              </p>
-            )}
-            {createSuccess && (
-              <p className="conference-message conference-message_success">
-                {createSuccess}
-              </p>
-            )}
-
-            <button type="submit" className="conference-primary-btn">
-              Создать конференцию
-            </button>
-          </form>
-        </section>
-
-        {/* Подключиться к конференции */}
-        <section className="conference-card">
-          <h2 className="conference-card-title">Подключиться к конференции</h2>
-          <p className="conference-card-subtitle">
-            Введите код конференции, который вам сообщил организатор.
-          </p>
-
-          <form onSubmit={handleJoin} className="conference-form">
-            <div className="conference-field">
-              <label className="conference-label">Код конференции</label>
-              <input
-                type="text"
-                className="conference-input"
-                placeholder="Например: AB12CD34"
-                value={joinCode}
-                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-              />
-            </div>
-
-            {joinError && (
-              <p className="conference-message conference-message_error">
-                {joinError}
-              </p>
-            )}
-            {joinSuccess && (
-              <p className="conference-message conference-message_success">
-                {joinSuccess}
-              </p>
-            )}
-
-            <button type="submit" className="conference-primary-btn">
-              Подключиться
-            </button>
-          </form>
-        </section>
-      </div>
+          <button type="submit" className="section-button">
+            Подключиться
+          </button>
+        </form>
+      </section>
     </div>
   );
 }

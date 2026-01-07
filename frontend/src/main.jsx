@@ -11,6 +11,7 @@ import { ConferencesPage } from "./pages/ConferencesPage";
 import { NotesPage } from "./pages/NotesPage";
 import { UploadsPage } from "./pages/UploadsPage";
 import { ProfilePage } from "./pages/ProfilePage";
+import { ConferenceRoomPage } from "./pages/ConferenceRoomPage";
 
 
 function Root() {
@@ -27,6 +28,8 @@ function Root() {
     <AppLayout>
       <Routes>
         <Route path="/" element={<ConferencesPage />} />
+        <Route path="/conferences" element={<ConferencesPage />} />
+        <Route path="/conference/:code" element={<ConferenceRoomPage />} />
         <Route path="/notes" element={<NotesPage />} />
         <Route path="/uploads" element={<UploadsPage />} />
         <Route path="/profile" element={<ProfilePage />} />

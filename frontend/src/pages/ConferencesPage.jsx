@@ -3,6 +3,16 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createConference, joinConference } from "../api/conferences";
 
+const LANGS = [
+  { code: "eng_Latn", label: "English" },
+  { code: "deu_Latn", label: "Deutsch" },
+  { code: "fra_Latn", label: "Français" },
+  { code: "spa_Latn", label: "Español" },
+  { code: "ita_Latn", label: "Italiano" },
+  { code: "por_Latn", label: "Português" },
+  { code: "tur_Latn", label: "Türkçe" },
+];
+
 export function ConferencesPage() {
   const navigate = useNavigate();
 
@@ -14,6 +24,9 @@ export function ConferencesPage() {
   // подключение по коду
   const [joinCode, setJoinCode] = useState("");
   const [joinError, setJoinError] = useState("");
+
+  // язык перевода для участника
+  const [joinLang, setJoinLang] = useState("eng_Latn");
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -27,16 +40,12 @@ export function ConferencesPage() {
     }
 
     try {
-      // ждём от бэка объект вида { id, code, title }
       const conf = await createConference(trimmedTitle);
-
       setCreatedConference(conf);
       setTitle("");
     } catch (err) {
       console.error("create conference error:", err);
-      setCreateError(
-        err.message || "Не удалось создать конференцию. Попробуйте ещё раз."
-      );
+      setCreateError(err.message || "Не удалось создать конференцию. Попробуйте ещё раз.");
     }
   };
 
@@ -49,6 +58,9 @@ export function ConferencesPage() {
           ...createdConference,
           title: createdConference.title ?? "Конференция",
           is_organizer: true,
+          // организатор тоже может выбрать язык для своего просмотра (если хочешь)
+          target_language: "eng_Latn",
+          src_language: "rus_Cyrl",
         },
       },
     });
@@ -65,7 +77,6 @@ export function ConferencesPage() {
     }
 
     try {
-      // ждём от бэка объект вида { id, code, title }
       const conf = await joinConference(trimmed);
 
       navigate(`/conference/${conf.code}`, {
@@ -74,15 +85,14 @@ export function ConferencesPage() {
             ...conf,
             title: conf.title ?? "Конференция",
             is_organizer: false,
+            target_language: joinLang,
+            src_language: "rus_Cyrl",
           },
         },
       });
     } catch (err) {
       console.error("join conference error:", err);
-      setJoinError(
-        err.message ||
-          "Не удалось подключиться к конференции. Проверьте код и попробуйте снова."
-      );
+      setJoinError(err.message || "Не удалось подключиться. Проверьте код и попробуйте снова.");
     }
   };
 
@@ -90,12 +100,10 @@ export function ConferencesPage() {
     <div className="page-inner">
       <h1 className="page-title">Конференции</h1>
 
-      {/* блок "создать конференцию" */}
       <section className="section-card">
         <h2 className="section-card-title">Создать конференцию</h2>
         <p className="section-card-subtitle">
-          Введите название конференции. После создания вы получите уникальный
-          код, которым сможете поделиться с участниками.
+          Введите название конференции. После создания вы получите уникальный код.
         </p>
 
         <form onSubmit={handleCreate} className="section-form">
@@ -110,11 +118,7 @@ export function ConferencesPage() {
             />
           </div>
 
-          {createError && (
-            <p className="section-message section-message_error">
-              {createError}
-            </p>
-          )}
+          {createError && <p className="section-message section-message_error">{createError}</p>}
 
           <button type="submit" className="section-button">
             Создать конференцию
@@ -125,9 +129,7 @@ export function ConferencesPage() {
           <div className="section-created">
             <p className="section-created-text">
               Конференция создана. Код:{" "}
-              <span className="section-created-code">
-                {createdConference.code}
-              </span>
+              <span className="section-created-code">{createdConference.code}</span>
             </p>
             <button
               type="button"
@@ -140,12 +142,9 @@ export function ConferencesPage() {
         )}
       </section>
 
-      {/* блок "подключиться к конференции" */}
       <section className="section-card">
         <h2 className="section-card-title">Подключиться к конференции</h2>
-        <p className="section-card-subtitle">
-          Введите код конференции, который вам сообщил организатор.
-        </p>
+        <p className="section-card-subtitle">Введите код конференции.</p>
 
         <form onSubmit={handleJoin} className="section-form">
           <div className="section-field">
@@ -159,11 +158,22 @@ export function ConferencesPage() {
             />
           </div>
 
-          {joinError && (
-            <p className="section-message section-message_error">
-              {joinError}
-            </p>
-          )}
+          <div className="section-field">
+            <label className="section-label">Язык перевода</label>
+            <select
+              className="section-input"
+              value={joinLang}
+              onChange={(e) => setJoinLang(e.target.value)}
+            >
+              {LANGS.map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {joinError && <p className="section-message section-message_error">{joinError}</p>}
 
           <button type="submit" className="section-button">
             Подключиться

@@ -1,39 +1,72 @@
 // frontend/src/api/conferences.js
-const API_BASE =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
-async function request(path, options = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-    ...options,
-  });
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 
-  if (!res.ok) {
-    let text = await res.text();
-    try {
-      const data = JSON.parse(text);
-      throw new Error(data.detail || "Ошибка запроса");
-    } catch {
-      throw new Error(text || "Ошибка запроса");
-    }
-  }
-
-  return res.json();
+function apiUrl(path) {
+  return `${API_BASE}${path}`;
 }
 
+// -----------------------------
+// REST: create/join
+// -----------------------------
 export async function createConference(title) {
-  return request("/api/conferences/create", {
+  const r = await fetch(apiUrl("/api/conferences/create"), {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title }),
   });
+  if (!r.ok) throw new Error(await r.text());
+  return await r.json();
 }
 
 export async function joinConference(code) {
-  return request("/api/conferences/join", {
+  const r = await fetch(apiUrl("/api/conferences/join"), {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ code }),
   });
+  if (!r.ok) throw new Error(await r.text());
+  return await r.json();
+}
+
+// -----------------------------
+// WS URL helper
+// -----------------------------
+export function conferenceWsUrl(code) {
+  // http://localhost:8000 -> ws://localhost:8000
+  const u = new URL(API_BASE);
+  const wsProto = u.protocol === "https:" ? "wss:" : "ws:";
+  return `${wsProto}//${u.host}/api/conferences/${encodeURIComponent(
+    code
+  )}/ws`;
+}
+
+// -----------------------------
+// Translate one segment (REST)
+// -----------------------------
+export async function translateSegment(text, src_lang, tgt_lang) {
+  const r = await fetch(apiUrl("/api/conferences/translate"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, src_lang, tgt_lang }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return await r.json(); // { translated: "..." }
+}
+
+// -----------------------------
+// Export download (opens new tab)
+// -----------------------------
+export function downloadExport(code, format, src_lang, tgt_lang, translated_text) {
+  const qs = new URLSearchParams({
+    format,
+    src_lang,
+    tgt_lang,
+    translated_text,
+  }).toString();
+
+  window.open(
+    apiUrl(`/api/conferences/${encodeURIComponent(code)}/export?${qs}`),
+    "_blank"
+  );
 }

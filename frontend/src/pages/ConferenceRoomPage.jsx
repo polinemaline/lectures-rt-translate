@@ -2,11 +2,26 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import {
-  conferenceWsUrl,
-  downloadExport,
-  translateSegment,
-} from "../api/conferences";
+import { conferenceWsUrl, downloadExport, translateSegment } from "../api/conferences";
+
+function loadConferenceFromStorage(code) {
+  try {
+    const raw = localStorage.getItem(`conference:${code}`);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function saveConferenceToStorage(conf) {
+  try {
+    if (!conf?.code) return;
+    localStorage.setItem(`conference:${conf.code}`, JSON.stringify(conf));
+  } catch {
+    // ignore
+  }
+}
 
 export function ConferenceRoomPage() {
   const { code } = useParams();
@@ -14,7 +29,47 @@ export function ConferenceRoomPage() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
 
-  const conference = location.state?.conference;
+  // IMPORTANT:
+  // - location.state disappears on refresh
+  // - organizer MUST keep role (otherwise mic disappears and WS stops sending segments)
+  const roleParam = useMemo(() => {
+    try {
+      return new URLSearchParams(location.search).get("role");
+    } catch {
+      return null;
+    }
+  }, [location.search]);
+
+  const storedConference = useMemo(() => {
+    if (!code) return null;
+    return loadConferenceFromStorage(code);
+  }, [code]);
+
+  const conference = useMemo(() => {
+    const stateConf = location.state?.conference || null;
+    const base = stateConf || storedConference;
+
+    // Minimal fallback if user opened a direct link without state/storage
+    const fallback = base || {
+      code,
+      title: "Конференция",
+      is_organizer: roleParam === "organizer",
+      target_language: "eng_Latn",
+      src_language: "rus_Cyrl",
+    };
+
+    // role query param has priority (survives refresh)
+    if (roleParam === "organizer") return { ...fallback, is_organizer: true };
+    if (roleParam === "participant") return { ...fallback, is_organizer: false };
+
+    return fallback;
+  }, [code, location.state, storedConference, roleParam]);
+
+  // Persist latest conference settings (role/langs) so refresh doesn't break behaviour
+  useEffect(() => {
+    if (!conference?.code) return;
+    saveConferenceToStorage(conference);
+  }, [conference]);
 
   const title = conference?.title ?? "Конференция";
   const isOrganizer = conference?.is_organizer ?? false;
@@ -76,6 +131,9 @@ export function ConferenceRoomPage() {
     wsRef.current = ws;
 
     ws.onopen = () => {
+      // IMPORTANT: role must be correct here; otherwise:
+      // - organizer won't send segments
+      // - participant won't request translation lang
       const joinMsg = {
         type: "join",
         role: isOrganizer ? "organizer" : "participant",
@@ -94,6 +152,7 @@ export function ConferenceRoomPage() {
         const items = msg.items || [];
         setOriginalLines(items);
 
+        // subtitles are shown only for participants, and translations are needed only for participants
         if (!isOrganizer) {
           if (
             Array.isArray(msg.translated_items) &&
@@ -101,6 +160,7 @@ export function ConferenceRoomPage() {
           ) {
             setTranslatedLines(msg.translated_items);
           } else {
+            // fallback: translate client-side (rare; should not be needed if WS works correctly)
             const out = [];
             for (const line of items) {
               try {
@@ -199,59 +259,46 @@ export function ConferenceRoomPage() {
       window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert("Web Speech API не поддерживается. Используй Chrome/Edge/Я.Браузер.");
+      alert("Web Speech API не поддерживается в этом браузере.");
       return null;
     }
 
     const rec = new SpeechRecognition();
-    rec.lang = sttLang;
     rec.continuous = true;
     rec.interimResults = false;
-
-    rec.onresult = (event) => {
-      if (!micOnRef.current) return;
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const res = event.results[i];
-        if (res.isFinal) {
-          const text = (res[0].transcript || "").trim();
-          if (!text) continue;
-
-          if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({ type: "segment", text }));
-          }
-        }
-      }
-    };
-
-    rec.onerror = (e) => {
-      const err = typeof e?.error === "string" ? e.error : "unknown";
-
-      if (micOnRef.current && (err === "network" || err === "service-not-allowed")) {
-        scheduleRestart(err);
-        return;
-      }
-
-      micOnRef.current = false;
-      setMicOn(false);
-    };
-
-    rec.onend = () => {
-      if (micOnRef.current) {
-        scheduleRestart("ended");
-      }
-    };
-
+    rec.lang = sttLang;
     return rec;
   };
 
   const startRecognitionOnly = async () => {
     if (!micOnRef.current) return;
+    if (!isOrganizer) return;
 
     const rec = createRecognition();
     if (!rec) return;
 
     recognitionRef.current = rec;
+
+    rec.onresult = (event) => {
+      try {
+        const last = event.results?.[event.results.length - 1];
+        const text = (last?.[0]?.transcript || "").trim();
+        if (!text) return;
+
+        // send to WS (server will broadcast original + translations for participants)
+        wsRef.current?.send(JSON.stringify({ type: "segment", text }));
+      } catch {}
+    };
+
+    rec.onerror = (e) => {
+      // network errors happen; restart with backoff
+      scheduleRestart(String(e?.error || "error"));
+    };
+
+    rec.onend = () => {
+      // if mic is still on -> restart
+      scheduleRestart("end");
+    };
 
     try {
       rec.start();

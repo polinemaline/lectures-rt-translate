@@ -13,6 +13,15 @@ const LANGS = [
   { code: "tur_Latn", label: "Türkçe" },
 ];
 
+function saveConferenceToStorage(conf) {
+  try {
+    if (!conf?.code) return;
+    localStorage.setItem(`conference:${conf.code}`, JSON.stringify(conf));
+  } catch {
+    // ignore
+  }
+}
+
 export function ConferencesPage() {
   const navigate = useNavigate();
 
@@ -52,17 +61,20 @@ export function ConferencesPage() {
   const handleConnectCreated = () => {
     if (!createdConference?.code) return;
 
-    navigate(`/conference/${createdConference.code}`, {
-      state: {
-        conference: {
-          ...createdConference,
-          title: createdConference.title ?? "Конференция",
-          is_organizer: true,
-          // организатор тоже может выбрать язык для своего просмотра (если хочешь)
-          target_language: "eng_Latn",
-          src_language: "rus_Cyrl",
-        },
-      },
+    const confForRoom = {
+      ...createdConference,
+      title: createdConference.title ?? "Конференция",
+      is_organizer: true,
+      target_language: "eng_Latn",
+      src_language: "rus_Cyrl",
+    };
+
+    // важно: сохраняем роль и настройки, чтобы после refresh / прямой ссылки организатор не терял роль
+    saveConferenceToStorage(confForRoom);
+
+    // роль продублируем в query param — это переживает refresh и не зависит от location.state
+    navigate(`/conference/${createdConference.code}?role=organizer`, {
+      state: { conference: confForRoom },
     });
   };
 
@@ -79,16 +91,18 @@ export function ConferencesPage() {
     try {
       const conf = await joinConference(trimmed);
 
-      navigate(`/conference/${conf.code}`, {
-        state: {
-          conference: {
-            ...conf,
-            title: conf.title ?? "Конференция",
-            is_organizer: false,
-            target_language: joinLang,
-            src_language: "rus_Cyrl",
-          },
-        },
+      const confForRoom = {
+        ...conf,
+        title: conf.title ?? "Конференция",
+        is_organizer: false,
+        target_language: joinLang,
+        src_language: "rus_Cyrl",
+      };
+
+      saveConferenceToStorage(confForRoom);
+
+      navigate(`/conference/${conf.code}?role=participant`, {
+        state: { conference: confForRoom },
       });
     } catch (err) {
       console.error("join conference error:", err);

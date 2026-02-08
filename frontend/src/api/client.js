@@ -1,41 +1,40 @@
 // frontend/src/api/client.js
-const BASE = ""; // если nginx проксирует /api на backend — оставляем пусто
+// Small fetch wrapper with optional base URL.
+// In dev you can keep same-origin; in Docker you can set VITE_API_URL (e.g. http://localhost:8080)
 
-function getToken() {
-  return localStorage.getItem("token"); // или как у вас хранится
+const BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE || "").replace(/\/$/, "");
+
+async function parseError(res) {
+  try {
+    const data = await res.json();
+    if (data?.detail) return typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
+    return JSON.stringify(data);
+  } catch {
+    try {
+      return await res.text();
+    } catch {
+      return `HTTP ${res.status}`;
+    }
+  }
 }
 
 export async function apiFetch(path, options = {}) {
-  const headers = {
-    "Content-Type": "application/json",
-    ...(options.headers || {}),
-  };
-
-  const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  const res = await fetch(BASE + path, { ...options, headers });
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(txt || res.statusText || "Request failed");
-  }
-  return res.json();
-}
-
-export async function apiUpload(path, formData) {
-  const headers = {};
-  const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  const res = await fetch(BASE + path, {
-    method: "POST",
-    headers,
-    body: formData,
+  const url = `${BASE}${path}`;
+  const res = await fetch(url, {
+    credentials: "include",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
   });
 
   if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(txt || res.statusText || "Upload failed");
+    const msg = await parseError(res);
+    throw new Error(msg || `HTTP ${res.status}`);
   }
-  return res.json();
+
+  const ct = res.headers.get("content-type") || "";
+  if (ct.includes("application/json")) return await res.json();
+  return await res.text();
 }

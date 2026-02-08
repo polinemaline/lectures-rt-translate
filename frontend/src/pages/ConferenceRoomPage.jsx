@@ -2,7 +2,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { conferenceWsUrl, downloadExport, translateSegment } from "../api/conferences";
+import {
+  conferenceWsUrl,
+  downloadExport,
+  translateSegment,
+} from "../api/conferences";
 
 export function ConferenceRoomPage() {
   const { code } = useParams();
@@ -27,13 +31,24 @@ export function ConferenceRoomPage() {
 
   const wsRef = useRef(null);
 
-  // --- organizer STT ---
+  // --- organizer mic/STT ---
   const recognitionRef = useRef(null);
-  const [listening, setListening] = useState(false);
+  const audioStreamRef = useRef(null);
+  const [micOn, setMicOn] = useState(false);
+  const micOnRef = useRef(false);
+
+  // timers / guards for restart
+  const restartTimerRef = useRef(null);
+  const restartingRef = useRef(false);
+  const networkFailCountRef = useRef(0);
+
+  useEffect(() => {
+    micOnRef.current = micOn;
+  }, [micOn]);
 
   const sttLang = useMemo(() => {
-    // только пример — можешь расширить
     if (srcLang === "rus_Cyrl") return "ru-RU";
+    if (srcLang === "eng_Latn") return "en-US";
     return "en-US";
   }, [srcLang]);
 
@@ -53,7 +68,7 @@ export function ConferenceRoomPage() {
     ]);
   }, [user, profile]);
 
-  // WS connect + receive segments
+  // WS connect + receive
   useEffect(() => {
     if (!code) return;
 
@@ -61,7 +76,15 @@ export function ConferenceRoomPage() {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      ws.send(JSON.stringify({ type: "join", role: isOrganizer ? "organizer" : "participant" }));
+      const joinMsg = {
+        type: "join",
+        role: isOrganizer ? "organizer" : "participant",
+      };
+
+      if (isOrganizer) joinMsg.src_lang = srcLang;
+      else joinMsg.tgt_lang = tgtLang;
+
+      ws.send(JSON.stringify(joinMsg));
     };
 
     ws.onmessage = async (ev) => {
@@ -71,16 +94,25 @@ export function ConferenceRoomPage() {
         const items = msg.items || [];
         setOriginalLines(items);
 
-        const out = [];
-        for (const line of items) {
-          try {
-            const tr = await translateSegment(line, srcLang, tgtLang);
-            out.push(tr.translated || "");
-          } catch {
-            out.push("");
+        if (!isOrganizer) {
+          if (
+            Array.isArray(msg.translated_items) &&
+            msg.translated_items.length === items.length
+          ) {
+            setTranslatedLines(msg.translated_items);
+          } else {
+            const out = [];
+            for (const line of items) {
+              try {
+                const tr = await translateSegment(line, srcLang, tgtLang);
+                out.push(tr.translated || "");
+              } catch {
+                out.push("");
+              }
+            }
+            setTranslatedLines(out);
           }
         }
-        setTranslatedLines(out);
 
         if (msg.is_active === false) setConfStatus("ended");
         return;
@@ -92,12 +124,17 @@ export function ConferenceRoomPage() {
 
         setOriginalLines((prev) => [...prev, text]);
 
-        try {
-          const tr = await translateSegment(text, srcLang, tgtLang);
-          setTranslatedLines((prev) => [...prev, tr.translated || ""]);
-        } catch (e) {
-          console.error(e);
-          setTranslatedLines((prev) => [...prev, ""]);
+        if (!isOrganizer) {
+          if (typeof msg.translated === "string") {
+            setTranslatedLines((prev) => [...prev, msg.translated]);
+          } else {
+            try {
+              const tr = await translateSegment(text, srcLang, tgtLang);
+              setTranslatedLines((prev) => [...prev, tr.translated || ""]);
+            } catch {
+              setTranslatedLines((prev) => [...prev, ""]);
+            }
+          }
         }
       }
 
@@ -106,8 +143,6 @@ export function ConferenceRoomPage() {
       }
     };
 
-    ws.onclose = () => {};
-
     return () => {
       try {
         ws.close();
@@ -115,27 +150,74 @@ export function ConferenceRoomPage() {
     };
   }, [code, isOrganizer, srcLang, tgtLang]);
 
-  const startSTT = () => {
+  const clearRestartTimer = () => {
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
+  };
+
+  const stopRecognitionInstance = () => {
+    try {
+      recognitionRef.current?.onresult && (recognitionRef.current.onresult = null);
+      recognitionRef.current?.onend && (recognitionRef.current.onend = null);
+      recognitionRef.current?.onerror && (recognitionRef.current.onerror = null);
+      recognitionRef.current?.onstart && (recognitionRef.current.onstart = null);
+    } catch {}
+    try {
+      recognitionRef.current?.abort?.();
+    } catch {}
+    try {
+      recognitionRef.current?.stop?.();
+    } catch {}
+    recognitionRef.current = null;
+  };
+
+  const scheduleRestart = (reason = "") => {
+    if (!micOnRef.current) return;
+    if (restartingRef.current) return;
+
+    restartingRef.current = true;
+    clearRestartTimer();
+
+    networkFailCountRef.current = Math.min(networkFailCountRef.current + 1, 6);
+    const n = networkFailCountRef.current;
+    const delay = Math.min(800 + n * 400, 3500);
+
+    restartTimerRef.current = setTimeout(async () => {
+      try {
+        stopRecognitionInstance();
+        await startRecognitionOnly();
+      } finally {
+        restartingRef.current = false;
+      }
+    }, delay);
+  };
+
+  const createRecognition = () => {
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert("Web Speech API не поддерживается. Используй Chrome/Edge.");
-      return;
+      alert("Web Speech API не поддерживается. Используй Chrome/Edge/Я.Браузер.");
+      return null;
     }
 
     const rec = new SpeechRecognition();
-    recognitionRef.current = rec;
     rec.lang = sttLang;
     rec.continuous = true;
     rec.interimResults = false;
 
     rec.onresult = (event) => {
+      if (!micOnRef.current) return;
+
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const res = event.results[i];
         if (res.isFinal) {
           const text = (res[0].transcript || "").trim();
-          if (text && wsRef.current?.readyState === WebSocket.OPEN) {
+          if (!text) continue;
+
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
             wsRef.current.send(JSON.stringify({ type: "segment", text }));
           }
         }
@@ -143,28 +225,90 @@ export function ConferenceRoomPage() {
     };
 
     rec.onerror = (e) => {
-      console.error(e);
-      setListening(false);
+      const err = typeof e?.error === "string" ? e.error : "unknown";
+
+      if (micOnRef.current && (err === "network" || err === "service-not-allowed")) {
+        scheduleRestart(err);
+        return;
+      }
+
+      micOnRef.current = false;
+      setMicOn(false);
     };
 
     rec.onend = () => {
-      setListening(false);
+      if (micOnRef.current) {
+        scheduleRestart("ended");
+      }
     };
 
-    rec.start();
-    setListening(true);
+    return rec;
   };
 
-  const stopSTT = () => {
+  const startRecognitionOnly = async () => {
+    if (!micOnRef.current) return;
+
+    const rec = createRecognition();
+    if (!rec) return;
+
+    recognitionRef.current = rec;
+
     try {
-      recognitionRef.current?.stop();
+      rec.start();
+      networkFailCountRef.current = 0;
+    } catch (e) {
+      scheduleRestart("start-failed");
+    }
+  };
+
+  const startMic = async () => {
+    if (!isOrganizer) return;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioStreamRef.current = stream;
+    } catch (e) {
+      micOnRef.current = false;
+      setMicOn(false);
+      alert("Нет доступа к микрофону (разрешение не выдано).");
+      return;
+    }
+
+    micOnRef.current = true;
+    setMicOn(true);
+
+    clearRestartTimer();
+    stopRecognitionInstance();
+    networkFailCountRef.current = 0;
+
+    await startRecognitionOnly();
+  };
+
+  const stopMic = () => {
+    micOnRef.current = false;
+    setMicOn(false);
+
+    clearRestartTimer();
+    stopRecognitionInstance();
+
+    try {
+      audioStreamRef.current?.getTracks?.().forEach((t) => t.stop());
     } catch {}
-    setListening(false);
+    audioStreamRef.current = null;
+  };
+
+  const toggleMic = () => {
+    if (!isOrganizer) return;
+    if (micOnRef.current) stopMic();
+    else startMic();
   };
 
   const handleExit = () => {
-    // при выходе участника показываем export (как минимум после выхода можно сразу)
-    // но UX: лучше сначала показать блок экспорта, а кнопку "выйти" делать ниже.
+    if (isOrganizer) {
+      stopMic();
+      navigate("/conferences");
+      return;
+    }
     setConfStatus("ended");
   };
 
@@ -179,9 +323,11 @@ export function ConferenceRoomPage() {
     });
   };
 
+  // ✅ ВАЖНО: экспортируем то, что реально видит участник (а не пытаемся заново переводить)
   const doExport = (format) => {
-  const translated_text = translatedLines.join("\n");
-  downloadExport(code, format, srcLang, tgtLang, translated_text);
+    const original_text = originalLines.join("\n");
+    const translated_text = translatedLines.join("\n");
+    downloadExport(code, format, srcLang, tgtLang, original_text, translated_text);
   };
 
   const goBackToList = () => {
@@ -197,34 +343,35 @@ export function ConferenceRoomPage() {
             Код конференции: <span className="conf-room-code">{code}</span>
           </p>
           <p className="conf-room-role">
-            Вы: {isOrganizer ? "организатор" : "участник"} | перевод: {tgtLang}
+            Вы: {isOrganizer ? "организатор" : "участник"}
+            {!isOrganizer && <> | перевод: {tgtLang}</>}
           </p>
         </div>
 
         <button className="conf-room-exit-button" onClick={handleExit}>
-          Выйти из конференции
+          {isOrganizer ? "Выйти" : "Выйти из конференции"}
         </button>
       </div>
 
+      {/* Organizer controls only */}
       {isOrganizer && confStatus === "active" && (
         <div className="conf-room-card" style={{ marginBottom: 12 }}>
-          <h2 className="conf-participants-title">Управление субтитрами</h2>
+          <h2 className="conf-participants-title">Управление конференцией</h2>
           <p className="conf-participants-subtitle">
-            Нажмите “Начать STT” — речь с микрофона будет распознаваться и рассылаться всем участникам.
+            Включите микрофон — ваша речь будет распознаваться и отправляться участникам как субтитры.
           </p>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            {!listening ? (
-              <button className="section-button" onClick={startSTT}>
-                Начать STT
-              </button>
-            ) : (
-              <button className="section-button" onClick={stopSTT}>
-                Остановить STT
-              </button>
-            )}
+
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <button className="section-button" onClick={toggleMic}>
+              {micOn ? "Микрофон: ВЫКЛ" : "Микрофон: ВКЛ"}
+            </button>
+
             <button
               className="section-button section-button_secondary"
-              onClick={() => wsRef.current?.send(JSON.stringify({ type: "end" }))}
+              onClick={() => {
+                stopMic();
+                wsRef.current?.send(JSON.stringify({ type: "end" }));
+              }}
             >
               Завершить конференцию
             </button>
@@ -232,13 +379,14 @@ export function ConferenceRoomPage() {
         </div>
       )}
 
+      {/* Organizer participants view */}
       {isOrganizer ? (
         <div className="conf-room-card">
           <div className="conf-participants-header">
             <div>
               <h2 className="conf-participants-title">Участники конференции</h2>
               <p className="conf-participants-subtitle">
-                Сейчас показывается только вы. Позже добавим список через WS.
+                Пока показывается только вы. Позже добавим список через WS.
               </p>
             </div>
             <span className="conf-participants-count">{participants.length}</span>
@@ -279,46 +427,49 @@ export function ConferenceRoomPage() {
         </div>
       ) : null}
 
-      {/* subtitles blocks for everyone */}
-      <div className="conf-room-card" style={{ marginTop: 12 }}>
-        <h2 className="conf-participants-title">Субтитры</h2>
-        <p className="conf-participants-subtitle">
-          Слева оригинал (STT организатора), справа перевод на ваш язык.
-        </p>
+      {/* Subtitles ONLY for participants */}
+      {!isOrganizer && (
+        <div className="conf-room-card" style={{ marginTop: 12 }}>
+          <h2 className="conf-participants-title">Субтитры</h2>
+          <p className="conf-participants-subtitle">
+            Слева оригинал (STT организатора), справа перевод на ваш язык.
+          </p>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 12,
-            marginTop: 12,
-          }}
-        >
-          <div style={{ border: "1px solid #ddd", borderRadius: 10, padding: 12 }}>
-            <h3 style={{ marginTop: 0 }}>Оригинал</h3>
-            <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
-              {originalLines.map((l, i) => (
-                <div key={i} style={{ marginBottom: 8 }}>
-                  {l}
-                </div>
-              ))}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 12,
+              marginTop: 12,
+            }}
+          >
+            <div style={{ border: "1px solid #ddd", borderRadius: 10, padding: 12 }}>
+              <h3 style={{ marginTop: 0 }}>Оригинал</h3>
+              <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
+                {originalLines.map((l, i) => (
+                  <div key={i} style={{ marginBottom: 8 }}>
+                    {l}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
 
-          <div style={{ border: "1px solid #ddd", borderRadius: 10, padding: 12 }}>
-            <h3 style={{ marginTop: 0 }}>Перевод</h3>
-            <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
-              {translatedLines.map((l, i) => (
-                <div key={i} style={{ marginBottom: 8 }}>
-                  {l}
-                </div>
-              ))}
+            <div style={{ border: "1px solid #ddd", borderRadius: 10, padding: 12 }}>
+              <h3 style={{ marginTop: 0 }}>Перевод</h3>
+              <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
+                {translatedLines.map((l, i) => (
+                  <div key={i} style={{ marginBottom: 8 }}>
+                    {l}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {confStatus === "ended" && (
+      {/* Export ONLY for participants */}
+      {!isOrganizer && confStatus === "ended" && (
         <div className="conf-room-card" style={{ marginTop: 12 }}>
           <h2 className="conf-participants-title">Конференция завершена</h2>
           <p className="conf-participants-subtitle">

@@ -33,12 +33,9 @@ export async function joinConference(code) {
 // WS URL helper
 // -----------------------------
 export function conferenceWsUrl(code) {
-  // http://localhost:8000 -> ws://localhost:8000
   const u = new URL(API_BASE);
   const wsProto = u.protocol === "https:" ? "wss:" : "ws:";
-  return `${wsProto}//${u.host}/api/conferences/${encodeURIComponent(
-    code
-  )}/ws`;
+  return `${wsProto}//${u.host}/api/conferences/${encodeURIComponent(code)}/ws`;
 }
 
 // -----------------------------
@@ -56,13 +53,22 @@ export async function translateSegment(text, src_lang, tgt_lang) {
 
 // -----------------------------
 // Export download (opens new tab)
+// Передаём то, что участник ВИДИТ: original_text и translated_text
 // -----------------------------
-export function downloadExport(code, format, src_lang, tgt_lang, translated_text) {
+export function downloadExport(
+  code,
+  format,
+  src_lang,
+  tgt_lang,
+  original_text,
+  translated_text
+) {
   const qs = new URLSearchParams({
     format,
     src_lang,
     tgt_lang,
-    translated_text,
+    original_text: original_text || "",
+    translated_text: translated_text || "",
   }).toString();
 
   window.open(

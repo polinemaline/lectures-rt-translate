@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import random
 import string
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
@@ -19,6 +20,9 @@ router = APIRouter(prefix="/api/conferences", tags=["conferences"])
 EXPORT_ROOT = Path("/data/uploads/conference_exports")
 
 
+# -------------------------
+# API models
+# -------------------------
 class Conference(BaseModel):
     id: int
     code: str
@@ -43,6 +47,9 @@ class TranslateResponse(BaseModel):
     translated: str
 
 
+# -------------------------
+# In-memory list of conferences
+# -------------------------
 _conferences: List[Conference] = []
 _next_id = 1
 
@@ -59,6 +66,62 @@ def _get_conf_by_code(code: str) -> Optional[Conference]:
     return None
 
 
+# -------------------------
+# Runtime for WS translation
+# -------------------------
+@dataclass
+class ClientConn:
+    ws: WebSocket
+    role: str  # organizer | participant
+    tgt_lang: str = "eng_Latn"
+
+
+@dataclass
+class ConferenceWsRuntime:
+    code: str
+    src_lang: str = "rus_Cyrl"
+    is_active: bool = True
+    segments: List[str] = field(default_factory=list)
+    clients: List[ClientConn] = field(default_factory=list)
+
+
+_WS: Dict[str, ConferenceWsRuntime] = {}
+
+
+def _ws_rt(code: str) -> ConferenceWsRuntime:
+    rt = _WS.get(code)
+    if rt:
+        return rt
+    rt = ConferenceWsRuntime(code=code)
+    _WS[code] = rt
+    return rt
+
+
+def _translate_nllb_codes(text: str, src_lang: str, tgt_lang: str) -> str:
+    """
+    Перевод для WS. Всегда возвращает не-пустое, если text не пустой:
+    - если перевод упал -> вернёт оригинал
+    """
+    text = (text or "").strip()
+    if not text:
+        return ""
+
+    if src_lang == tgt_lang:
+        return text
+
+    try:
+        src_iso = nllb_to_iso(src_lang)
+        tgt_iso = nllb_to_iso(tgt_lang)
+        out = translate_text(text, src_iso, tgt_iso)
+        out = (out or "").strip()
+        return out if out else text
+    except Exception:
+        return text
+
+
+# -------------------------
+# REST: create/join/translate/export
+# -------------------------
 @router.post("/create", response_model=Conference)
 def create_conference(payload: CreateConferencePayload) -> Conference:
     global _next_id
@@ -76,7 +139,12 @@ def create_conference(payload: CreateConferencePayload) -> Conference:
     _next_id += 1
     _conferences.append(conf)
 
+    # attach base runtime (история оригинала)
     RUNTIME.attach(conf_id=conf.id, code=conf.code, title=conf.title)
+
+    # attach WS runtime
+    _ws_rt(conf.code)
+
     return conf
 
 
@@ -91,41 +159,18 @@ def join_conference(payload: JoinConferencePayload) -> Conference:
         raise HTTPException(status_code=404, detail="Конференция с таким кодом не найдена")
 
     RUNTIME.attach(conf_id=conf.id, code=conf.code, title=conf.title)
+    _ws_rt(conf.code)
+
     return conf
-
-
-@router.get("/{code}/status")
-def conference_status(code: str):
-    code = code.strip().upper()
-    conf = _get_conf_by_code(code)
-    if not conf:
-        raise HTTPException(404, "Конференция не найдена")
-
-    rt = RUNTIME.attach(conf_id=conf.id, code=conf.code, title=conf.title)
-    return {
-        "code": code,
-        "title": conf.title,
-        "is_active": rt.is_active,
-        "segments_count": len(rt.segments),
-    }
-
-
-@router.post("/{code}/end")
-def end_conference(code: str):
-    code = code.strip().upper()
-    conf = _get_conf_by_code(code)
-    if not conf:
-        raise HTTPException(404, "Конференция не найдена")
-
-    RUNTIME.end(code)
-    return {"ok": True}
 
 
 @router.post("/translate", response_model=TranslateResponse)
 def translate_api(payload: TranslateRequest) -> TranslateResponse:
-    src_iso = nllb_to_iso(payload.src_lang)
-    tgt_iso = nllb_to_iso(payload.tgt_lang)
-    translated = translate_text(payload.text, src_iso, tgt_iso)
+    text = (payload.text or "").strip()
+    if not text:
+        return TranslateResponse(translated="")
+
+    translated = _translate_nllb_codes(text, payload.src_lang, payload.tgt_lang)
     return TranslateResponse(translated=translated)
 
 
@@ -135,27 +180,26 @@ def export_notes(
     format: Literal["pdf", "docx"] = Query(...),
     src_lang: str = Query(..., description="rus_Cyrl"),
     tgt_lang: str = Query(..., description="eng_Latn"),
+    original_text: str = Query("", description="participant original notes"),
     translated_text: str = Query("", description="participant translated notes"),
 ):
-    """
-    translated_text приходит с клиента, потому что у каждого участника свой язык.
-    Возвращаем FileResponse, чтобы браузер скачивал файл.
-    """
     code = code.strip().upper()
     conf = _get_conf_by_code(code)
     if not conf:
         raise HTTPException(404, "Конференция не найдена")
 
-    rt = RUNTIME.attach(conf_id=conf.id, code=conf.code, title=conf.title)
-    original = "\n".join(RUNTIME.history(code, limit=5000)).strip()
+    _ = RUNTIME.attach(conf_id=conf.id, code=conf.code, title=conf.title)
 
     EXPORT_ROOT.mkdir(parents=True, exist_ok=True)
     out_dir = EXPORT_ROOT / code
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    original = (original_text or "").strip()
+    translated = (translated_text or "").strip()
+
     if format == "docx":
         out_path = out_dir / "notes.docx"
-        export_docx(out_path, original, translated_text, src_label=src_lang, tgt_label=tgt_lang)
+        export_docx(out_path, original, translated, src_label=src_lang, tgt_label=tgt_lang)
         return FileResponse(
             str(out_path),
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -163,7 +207,7 @@ def export_notes(
         )
 
     out_path = out_dir / "notes.pdf"
-    export_pdf(out_path, original, translated_text, src_label=src_lang, tgt_label=tgt_lang)
+    export_pdf(out_path, original, translated, src_label=src_lang, tgt_label=tgt_lang)
     return FileResponse(
         str(out_path),
         media_type="application/pdf",
@@ -171,6 +215,9 @@ def export_notes(
     )
 
 
+# -------------------------
+# WebSocket: fan-out original + per-client translation
+# -------------------------
 @router.websocket("/{code}/ws")
 async def conference_ws(ws: WebSocket, code: str):
     code = code.strip().upper()
@@ -180,9 +227,13 @@ async def conference_ws(ws: WebSocket, code: str):
         await ws.close(code=1008)
         return
 
-    rt = RUNTIME.attach(conf_id=conf.id, code=conf.code, title=conf.title)
+    base_rt = RUNTIME.attach(conf_id=conf.id, code=conf.code, title=conf.title)
+    ws_rt = _ws_rt(code)
+
     await ws.accept()
-    rt.sockets.add(ws)
+
+    role = "participant"
+    tgt_lang = "eng_Latn"
 
     try:
         join_msg = await ws.receive_json()
@@ -190,48 +241,110 @@ async def conference_ws(ws: WebSocket, code: str):
             await ws.close(code=1008)
             return
 
-        role = join_msg.get("role")
+        role = join_msg.get("role") or "participant"
         if role not in ("organizer", "participant"):
             await ws.close(code=1008)
             return
 
-        await ws.send_json({"type": "history", "items": RUNTIME.history(code), "is_active": rt.is_active})
+        # organizer может прислать src_lang
+        if role == "organizer":
+            ws_rt.src_lang = join_msg.get("src_lang") or ws_rt.src_lang
+
+        # participant присылает tgt_lang
+        if role == "participant":
+            tgt_lang = join_msg.get("tgt_lang") or tgt_lang
+
+        client = ClientConn(ws=ws, role=role, tgt_lang=tgt_lang)
+        ws_rt.clients.append(client)
+
+        # История оригинала
+        items = list(base_rt.segments)
+
+        # История перевода (только для участника; организатору всё равно — фронт скрывает)
+        translated_items: List[str] = []
+        if role == "participant":
+            for s in items:
+                translated_items.append(_translate_nllb_codes(s, ws_rt.src_lang, tgt_lang))
+
+        await ws.send_json(
+            {
+                "type": "history",
+                "items": items,
+                "translated_items": translated_items,
+                "is_active": ws_rt.is_active,
+                "src_lang": ws_rt.src_lang,
+            }
+        )
 
         while True:
             data = await ws.receive_json()
 
             if data.get("type") == "segment":
-                if not rt.is_active:
-                    await ws.send_json({"type": "ended"})
+                if not ws_rt.is_active:
+                    # конференция уже закончена
+                    try:
+                        await ws.send_json({"type": "ended"})
+                    except Exception:
+                        pass
+                    continue
+
+                # сегменты принимаем только от организатора
+                if role != "organizer":
                     continue
 
                 text = (data.get("text") or "").strip()
                 if not text:
                     continue
 
+                # сохраняем в основной истории (оригинал)
                 RUNTIME.add_segment(code, text)
+                ws_rt.src_lang = ws_rt.src_lang or "rus_Cyrl"
 
-                dead = []
-                for s in list(rt.sockets):
+                # broadcast всем:
+                dead: List[ClientConn] = []
+                for c in list(ws_rt.clients):
                     try:
-                        await s.send_json({"type": "segment", "text": text})
+                        if c.role == "participant":
+                            tr = _translate_nllb_codes(text, ws_rt.src_lang, c.tgt_lang)
+                            await c.ws.send_json({"type": "segment", "text": text, "translated": tr})
+                        else:
+                            # организатору перевод не нужен; но можно слать только оригинал,
+                            # фронт всё равно скрывает субтитры у организатора
+                            await c.ws.send_json({"type": "segment", "text": text})
                     except Exception:
-                        dead.append(s)
-                for s in dead:
-                    rt.sockets.discard(s)
+                        dead.append(c)
+
+                for c in dead:
+                    try:
+                        ws_rt.clients.remove(c)
+                    except ValueError:
+                        pass
 
             elif data.get("type") == "end":
-                rt.is_active = False
-                dead = []
-                for s in list(rt.sockets):
+                if role != "organizer":
+                    continue
+
+                ws_rt.is_active = False
+
+                dead: List[ClientConn] = []
+                for c in list(ws_rt.clients):
                     try:
-                        await s.send_json({"type": "ended"})
+                        await c.ws.send_json({"type": "ended"})
                     except Exception:
-                        dead.append(s)
-                for s in dead:
-                    rt.sockets.discard(s)
+                        dead.append(c)
+
+                for c in dead:
+                    try:
+                        ws_rt.clients.remove(c)
+                    except ValueError:
+                        pass
 
     except WebSocketDisconnect:
         pass
     finally:
-        rt.sockets.discard(ws)
+        # удалить подключение
+        ws_rt.clients = [c for c in ws_rt.clients if c.ws is not ws]
+        try:
+            await ws.close()
+        except Exception:
+            pass

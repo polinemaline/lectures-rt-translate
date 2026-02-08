@@ -44,6 +44,9 @@ services:
     - HF_HOME=/data/hf
     - TRANSFORMERS_CACHE=/data/hf
     - HUGGINGFACE_HUB_CACHE=/data/hf
+    - TRANSLATE_BACKEND=libre
+    - LIBRETRANSLATE_URL=http://libretranslate:5000
+
 
 
   frontend:
@@ -56,6 +59,13 @@ services:
       - backend
     ports:
       - "5173:80"
+
+  libretranslate:
+    image: libretranslate/libretranslate:latest
+    environment:
+      - LT_LOAD_ONLY=en,ru,de,fr,es,it,pt,tr
+    ports:
+      - "5000:5000"
 
 volumes:
   postgres_data: {}

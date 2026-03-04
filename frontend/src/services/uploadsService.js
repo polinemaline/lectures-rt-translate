@@ -1,4 +1,5 @@
 // frontend/src/services/uploadsService.js
+
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 function authHeaders(token) {
@@ -51,6 +52,7 @@ export async function fetchJobStatus(jobId, token) {
   const res = await fetch(`${API_BASE}/api/uploads/${jobId}/status`, {
     headers: { ...authHeaders(token) },
   });
+
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
     throw new Error(txt || "Не удалось получить статус");
@@ -59,9 +61,8 @@ export async function fetchJobStatus(jobId, token) {
 }
 
 export function downloadJobResult(jobId, format, token) {
-  // просто открываем ссылку (браузер скачает)
   const url = `${API_BASE}/api/uploads/${jobId}/download?format=${format}`;
-  // для Authorization в download ссылке проще открыть через fetch->blob, но сделаем правильно:
+
   return fetch(url, { headers: { ...authHeaders(token) } })
     .then(async (res) => {
       if (!res.ok) {
@@ -82,14 +83,15 @@ export function downloadJobResult(jobId, format, token) {
     });
 }
 
-export async function saveNoteStub(jobId, token) {
+export async function saveUploadToNotes(jobId, token) {
   const res = await fetch(`${API_BASE}/api/uploads/${jobId}/save-note`, {
     method: "POST",
     headers: { ...authHeaders(token) },
   });
+
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
     throw new Error(txt || "Не удалось сохранить в конспекты");
   }
-  return res.json();
+  return res.json(); // {ok, note_id, message}
 }

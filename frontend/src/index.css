@@ -1379,3 +1379,430 @@ body {
   gap: 10px;
   flex-wrap: wrap;
 }
+/* ---------- Notes (Конспекты) ---------- */
+
+.notes-page {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+  min-height: 520px;
+}
+
+@media (max-width: 980px) {
+  .notes-page {
+    grid-template-columns: 1fr;
+  }
+}
+
+.notes-list {
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 18px;
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  min-height: 520px;
+}
+
+.notes-list-head {
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.notes-search {
+  display: flex;
+  gap: 10px;
+}
+
+.notes-search-input {
+  flex: 1;
+  border-radius: 12px;
+  border: 1px solid #4b5563;
+  background: #020617;
+  color: #e5e7eb;
+  padding: 9px 10px;
+  font-size: 14px;
+}
+
+.notes-refresh {
+  width: 42px;
+  border-radius: 12px;
+  border: 1px solid #4b5563;
+  background: #020617;
+  color: #e5e7eb;
+  cursor: pointer;
+}
+
+.notes-refresh:hover {
+  background: #111827;
+}
+
+.notes-count {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.notes-list-body {
+  padding: 10px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.notes-item {
+  text-align: left;
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(2, 6, 23, 0.55);
+  color: #e5e7eb;
+  border-radius: 14px;
+  padding: 12px 12px 10px;
+  cursor: pointer;
+}
+
+.notes-item:hover {
+  background: rgba(2, 6, 23, 0.75);
+}
+
+.notes-item_active {
+  border-color: rgba(99, 102, 241, 0.85);
+  box-shadow: 0 0 0 1px rgba(168, 85, 247, 0.45) inset;
+}
+
+.notes-item-title {
+  font-weight: 650;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.notes-item-meta {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-bottom: 8px;
+}
+
+.notes-item-preview {
+  font-size: 13px;
+  color: #d1d5db;
+  line-height: 1.35;
+}
+
+.notes-empty {
+  padding: 18px 14px;
+  color: #e5e7eb;
+  font-size: 14px;
+}
+
+.notes-view {
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 18px;
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.6);
+  padding: 14px;
+  min-height: 520px;
+  min-width: 0;
+}
+
+.notes-view-empty {
+  color: #9ca3af;
+  font-size: 14px;
+  padding: 12px;
+}
+
+.notes-view-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.notes-title-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex: 1;
+  min-width: 260px;
+}
+
+.notes-title-input {
+  flex: 1;
+  border-radius: 12px;
+  border: 1px solid #4b5563;
+  background: #020617;
+  color: #e5e7eb;
+  padding: 9px 10px;
+  font-size: 14px;
+}
+
+.notes-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* reused in ConferenceRoomPage + NotesPage */
+.notes-shell {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  min-height: 360px;
+}
+
+@media (max-width: 980px) {
+  .notes-shell {
+    grid-template-columns: 1fr;
+  }
+}
+
+.notes-panel {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(2, 6, 23, 0.55);
+  border-radius: 16px;
+  padding: 12px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.notes-panel-title {
+  font-size: 14px;
+  font-weight: 650;
+  margin-bottom: 2px;
+}
+
+.notes-panel-subtitle {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-bottom: 10px;
+}
+
+.notes-panel-body {
+  overflow: auto;
+  min-height: 0;
+  padding-right: 4px;
+}
+
+.notes-line {
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  margin-bottom: 8px;
+  background: rgba(2, 6, 23, 0.35);
+  word-break: break-word;
+}
+/* ===== Compact cards on Conferences + Uploads (не на всю ширину) ===== */
+
+/* Конференции: ограничиваем ширину всего блока и центрируем */
+.conferences-page,
+.page-inner {
+  /* оставляем как есть глобально, но ниже точечные правила */
+}
+
+/* Если страница конференций использует .conferences-page */
+.conferences-page {
+  max-width: 980px; /* сам контент */
+  margin: 0 auto;
+}
+
+/* Карточки на странице конференций: не растягивать */
+.conferences-page .conference-card {
+  max-width: 820px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Если у тебя uploads построены на .uploads-page/.uploads-card — уже есть max-width,
+   но на случай, если там используются conference-card */
+.uploads-page .conference-card {
+  max-width: 820px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* На маленьких экранах пусть занимают всю ширину */
+@media (max-width: 880px) {
+  .conferences-page .conference-card,
+  .uploads-page .conference-card {
+    max-width: 100%;
+  }
+}
+
+/* Чуть более “воздушная” сетка, чтобы не казалось гигантским */
+.conferences-grid {
+  max-width: 860px;
+  margin-left: auto;
+  margin-right: auto;
+  grid-template-columns: 1fr !important; /* всегда одна колонка */
+}
+
+/* Метаданные карточки конспекта (чтобы выглядело аккуратно) */
+.notes-item-meta {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-bottom: 8px;
+}
+
+/* RESTORE ORIGINAL PROFILE STYLES */
+/* Вернули внешний вид ProfilePage к исходному варианту (как в проекте изначально). */
+
+.profile-page {
+  min-height: calc(100vh - 64px);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 40px 16px;
+}
+
+.profile-card {
+  position: relative;
+  max-width: 520px;
+  width: 100%;
+  background: rgba(15, 23, 42, 0.95);
+  border-radius: 20px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.65);
+  padding: 28px 24px 24px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+}
+
+.profile-title {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #e5e7eb;
+}
+
+.profile-subtitle {
+  font-size: 14px;
+  color: #9ca3af;
+  margin-bottom: 20px;
+}
+
+.profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.profile-avatar-block {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.profile-avatar-preview {
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
+  background: #111827;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 24px;
+  color: #e5e7eb;
+  overflow: hidden;
+}
+
+.profile-avatar-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-avatar-label {
+  display: inline-flex;
+  align-items: center;
+}
+
+.profile-avatar-button {
+  display: inline-flex;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #020617;
+  color: #f9fafb;
+  font-size: 14px;
+  cursor: pointer;
+  border: 1px solid #4b5563;
+}
+
+.profile-avatar-input {
+  display: none;
+}
+
+.profile-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-label {
+  font-size: 13px;
+  color: #d1d5db;
+}
+
+.profile-input {
+  border-radius: 10px;
+  border: 1px solid #4b5563;
+  padding: 8px 10px;
+  font-size: 14px;
+  background: #020617;
+  color: #e5e7eb;
+}
+
+.profile-input:disabled {
+  background: #020617;
+  color: #6b7280;
+}
+
+.profile-save-button {
+  margin-top: 4px;
+  width: 100%;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+}
+
+.profile-save-button:hover {
+  background: #1d4ed8;
+}
+
+.profile-message {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #bbf7d0;
+}
+
+/* кнопка-крестик закрытия профиля */
+.profile-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.profile-close:hover {
+  background: rgba(15, 23, 42, 0.7);
+  color: #e5e7eb;
+}

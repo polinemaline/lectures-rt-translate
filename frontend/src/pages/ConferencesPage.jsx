@@ -111,7 +111,7 @@ export function ConferencesPage() {
   };
 
   return (
-    <div className="page-inner">
+    <div className="page-inner conferences-page">
       <h1 className="page-title">Конференции</h1>
 
       <section className="section-card">

@@ -1,4 +1,5 @@
 # app/api_uploads.py
+
 import shutil
 from pathlib import Path
 
@@ -12,12 +13,12 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.responses import FileResponse
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api_auth import get_current_user
 from app.db import get_session
-from app.models import UploadJob
+from app.models import Note, UploadJob
 
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
 
@@ -50,7 +51,8 @@ async def upload_file(
     ext = (file.filename.split(".")[-1] if file.filename else "").lower()
     if ext not in allowed_ext:
         raise HTTPException(
-            400, f"Неподдерживаемый формат. Разрешены: {', '.join(sorted(allowed_ext))}"
+            400,
+            f"Неподдерживаемый формат.\nРазрешены: {', '.join(sorted(allowed_ext))}",
         )
 
     job = UploadJob(
@@ -86,7 +88,6 @@ async def start_job(
     target_language = payload.get("target_language")
     if not target_language:
         raise HTTPException(422, "target_language is required")
-
     if target_language not in {x["code"] for x in SUPPORTED_LANGUAGES}:
         raise HTTPException(400, "Неподдерживаемый язык перевода")
 
@@ -110,7 +111,6 @@ async def start_job(
     from app.uploads_worker import process_upload_job
 
     background.add_task(process_upload_job, job_id)
-
     return {"ok": True}
 
 
@@ -163,7 +163,7 @@ async def download_result(
 
 
 @router.post("/{job_id}/save-note")
-async def save_note_stub(
+async def save_note(
     job_id: int,
     session: AsyncSession = Depends(get_session),
     user=Depends(get_current_user),
@@ -174,7 +174,27 @@ async def save_note_stub(
     job = res.scalar_one_or_none()
     if not job:
         raise HTTPException(404, "Job not found")
+
     if job.status != "done":
         raise HTTPException(400, "Перевод еще не готов")
 
-    return {"ok": True, "message": "Заглушка: позже сохраним в конспекты"}
+    title = f"Файл: {job.filename}" if job.filename else "Конспект (файл)"
+    original_text = (job.transcript_text or "").strip()
+    translated_text = (job.translated_text or "").strip()
+
+    if not original_text and not translated_text:
+        raise HTTPException(400, "Нет текста для сохранения (пустой результат)")
+
+    note = Note(
+        user_id=user.id,
+        title=title,
+        original_language=job.src_language,
+        target_language=job.target_language,
+        original_text=original_text,
+        translated_text=translated_text,
+    )
+    session.add(note)
+    await session.commit()
+    await session.refresh(note)
+
+    return {"ok": True, "note_id": note.id, "message": "Конспект сохранён на сайте"}

@@ -9,7 +9,6 @@ services:
       POSTGRES_DB: lectures
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    # порт наружу — удобно для локальных инструментов (psql/DB client)
     ports:
       - "5432:5432"
     healthcheck:
@@ -30,24 +29,25 @@ services:
         condition: service_healthy
     env_file:
       - ./backend/.env
-    # монтируем только пакет приложения и uploads, чтобы не перекрыть alembic.ini/migrations в /app
     volumes:
       - ./backend/app:/app/app
       - ./backend/uploads:/app/uploads
       - ./backend/uploads-data:/data/uploads
-      - hf_cache:/data/h
+      - hf_cache:/data/hf
     ports:
       - "8000:8000"
-    # start.sh должен внутри образа вызывать: alembic -c /app/alembic.ini upgrade head && uvicorn ...
     command: ["/app/start.sh"]
     environment:
-    - HF_HOME=/data/hf
-    - TRANSFORMERS_CACHE=/data/hf
-    - HUGGINGFACE_HUB_CACHE=/data/hf
-    - TRANSLATE_BACKEND=libre
-    - LIBRETRANSLATE_URL=http://libretranslate:5000
-
-
+      HF_HOME: /data/hf
+      TRANSFORMERS_CACHE: /data/hf
+      HUGGINGFACE_HUB_CACHE: /data/hf
+      TRANSLATE_BACKEND: libre
+      LIBRETRANSLATE_URL: http://libretranslate:5000
+      LIVE_STT_MODEL_SIZE: small
+      LIVE_STT_DEVICE: cpu
+      LIVE_STT_COMPUTE_TYPE: int8
+      LIVE_STT_BUFFER_SECONDS: 12
+      LIVE_STT_MIN_UPDATE_SECONDS: 0.8
 
   frontend:
     build:

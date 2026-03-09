@@ -1,5 +1,3 @@
-# backend/app/api_notes.py
-
 from __future__ import annotations
 
 import datetime as dt
@@ -43,10 +41,10 @@ class NoteOut(BaseModel):
     target_language: str | None = None
     original_text: str
     translated_text: str
-    created_at: dt.datetime | None = None  # ✅ FIX: было str
+    created_at: dt.datetime | None = None
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 
 @router.get("", response_model=list[NoteOut])
@@ -57,7 +55,8 @@ async def list_notes(
     res = await session.execute(
         select(Note).where(Note.user_id == user.id).order_by(Note.id.desc())
     )
-    return res.scalars().all()
+    notes = res.scalars().all()
+    return [NoteOut.from_orm(note) for note in notes]
 
 
 @router.get("/{note_id}", response_model=NoteOut)
@@ -72,7 +71,7 @@ async def get_note(
     note = res.scalar_one_or_none()
     if not note:
         raise HTTPException(404, "Note not found")
-    return note
+    return NoteOut.from_orm(note)
 
 
 @router.post("", response_model=NoteOut)
@@ -82,6 +81,7 @@ async def create_note(
     user=Depends(get_current_user),
 ):
     title = (payload.title or "").strip() or "Конспект"
+
     note = Note(
         user_id=user.id,
         title=title,
@@ -93,7 +93,7 @@ async def create_note(
     session.add(note)
     await session.commit()
     await session.refresh(note)
-    return note
+    return NoteOut.from_orm(note)
 
 
 @router.put("/{note_id}", response_model=NoteOut)
@@ -119,7 +119,7 @@ async def update_note(
 
     await session.commit()
     await session.refresh(note)
-    return note
+    return NoteOut.from_orm(note)
 
 
 @router.delete("/{note_id}")
@@ -145,7 +145,7 @@ async def delete_note(
 @router.get("/{note_id}/export")
 async def export_note(
     note_id: int,
-    format: Literal["pdf", "docx"] = Query(..., pattern="^(pdf|docx)$"),
+    format: Literal["pdf", "docx"] = Query(...),
     session: AsyncSession = Depends(get_session),
     user=Depends(get_current_user),
 ):

@@ -1,6 +1,4 @@
-# app/api_auth.py
-
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,10 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_session
 from app.models import User
 
-router = APIRouter(tags=["auth"])  # <--- БЕЗ prefix="/auth"!
-
-
-# ---------- Pydantic-схемы ----------
+router = APIRouter(tags=["auth"])
 
 
 class RegisterRequest(BaseModel):
@@ -32,19 +27,15 @@ class UserOut(BaseModel):
     full_name: str | None = None
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 
 class LoginResponse(BaseModel):
     user: UserOut
-    token: str  # пока фейковый
-
-
-# ---------- "Хеширование" пароля (наш простой вариант) ----------
+    token: str
 
 
 def hash_password(password: str) -> str:
-    # простой вариант, без bcrypt
     import hashlib
 
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
@@ -57,22 +48,17 @@ def verify_password(password: str, password_hash: str) -> bool:
     return hmac.compare_digest(calc, password_hash)
 
 
-# ---------- Эндпоинты ----------
-
-
 @router.post("/register", status_code=201)
 async def register_user(
     payload: RegisterRequest,
     session: AsyncSession = Depends(get_session),
 ):
-    # 1. пароли совпадают?
     if payload.password != payload.password_confirm:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Пароли не совпадают",
         )
 
-    # 2. проверяем уникальность email
     result = await session.execute(select(User).where(User.email == payload.email))
     existing = result.scalar_one_or_none()
     if existing:
@@ -108,23 +94,13 @@ async def login_user(
         )
 
     token = f"mock-token-{user.id}"
-
-    return LoginResponse(user=user, token=token)
-
-
-# app/api_auth.py
-from fastapi import Header
-from sqlalchemy import select
+    return LoginResponse(user=UserOut.from_orm(user), token=token)
 
 
 async def get_current_user(
     authorization: str | None = Header(default=None),
     session: AsyncSession = Depends(get_session),
 ) -> User:
-    """
-    Ждём заголовок:
-      Authorization: Bearer mock-token-<user_id>
-    """
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing Authorization header")
 

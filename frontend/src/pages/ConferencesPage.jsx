@@ -1,4 +1,3 @@
-// frontend/src/pages/ConferencesPage.jsx
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createConference, joinConference } from "../api/conferences";
@@ -13,6 +12,41 @@ const LANGS = [
   { code: "tur_Latn", label: "Türkçe" },
 ];
 
+const secondaryButtonStyle = {
+  minHeight: 40,
+  borderRadius: 999,
+  border: "1px solid rgba(148,163,184,0.22)",
+  background: "rgba(15,23,42,0.62)",
+  color: "#e5eefc",
+  padding: "0 16px",
+  fontWeight: 600,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
+};
+
+const fieldStyle = {
+  width: "100%",
+  minHeight: 42,
+  borderRadius: 999,
+  border: "1px solid rgba(148,163,184,0.22)",
+  background: "rgba(15,23,42,0.62)",
+  color: "#e5eefc",
+  padding: "0 14px",
+  outline: "none",
+  font: "inherit",
+  boxSizing: "border-box",
+};
+
+const selectStyle = {
+  ...fieldStyle,
+  appearance: "none",
+  WebkitAppearance: "none",
+  MozAppearance: "none",
+  colorScheme: "dark",
+};
+
 function saveConferenceToStorage(conf) {
   try {
     if (!conf?.code) return;
@@ -25,16 +59,12 @@ function saveConferenceToStorage(conf) {
 export function ConferencesPage() {
   const navigate = useNavigate();
 
-  // создание конференции
   const [title, setTitle] = useState("");
   const [createError, setCreateError] = useState("");
   const [createdConference, setCreatedConference] = useState(null);
 
-  // подключение по коду
   const [joinCode, setJoinCode] = useState("");
   const [joinError, setJoinError] = useState("");
-
-  // язык перевода для участника
   const [joinLang, setJoinLang] = useState("eng_Latn");
 
   const handleCreate = async (e) => {
@@ -54,7 +84,9 @@ export function ConferencesPage() {
       setTitle("");
     } catch (err) {
       console.error("create conference error:", err);
-      setCreateError(err.message || "Не удалось создать конференцию. Попробуйте ещё раз.");
+      setCreateError(
+        err.message || "Не удалось создать конференцию.\nПопробуйте ещё раз."
+      );
     }
   };
 
@@ -69,10 +101,8 @@ export function ConferencesPage() {
       src_language: "rus_Cyrl",
     };
 
-    // важно: сохраняем роль и настройки, чтобы после refresh / прямой ссылки организатор не терял роль
     saveConferenceToStorage(confForRoom);
 
-    // роль продублируем в query param — это переживает refresh и не зависит от location.state
     navigate(`/conference/${createdConference.code}?role=organizer`, {
       state: { conference: confForRoom },
     });
@@ -106,94 +136,125 @@ export function ConferencesPage() {
       });
     } catch (err) {
       console.error("join conference error:", err);
-      setJoinError(err.message || "Не удалось подключиться. Проверьте код и попробуйте снова.");
+      setJoinError(
+        err.message || "Не удалось подключиться.\nПроверьте код и попробуйте снова."
+      );
     }
   };
 
   return (
-    <div className="page-inner conferences-page">
+    <div className="page-inner">
       <h1 className="page-title">Конференции</h1>
 
-      <section className="section-card">
-        <h2 className="section-card-title">Создать конференцию</h2>
-        <p className="section-card-subtitle">
-          Введите название конференции. После создания вы получите уникальный код.
-        </p>
+      <div style={{ display: "grid", gap: 18 }}>
+        <section className="conference-card" style={{ padding: 18 }}>
+          <h2 style={{ marginTop: 0 }}>Создать конференцию</h2>
+          <p style={{ color: "#9ca3af", marginTop: -6 }}>
+            Введите название конференции. После создания вы получите уникальный код.
+          </p>
 
-        <form onSubmit={handleCreate} className="section-form">
-          <div className="section-field">
-            <label className="section-label">Название конференции</label>
-            <input
-              type="text"
-              className="section-input"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Например: Лекция по математике"
-            />
-          </div>
+          <form onSubmit={handleCreate} style={{ display: "grid", gap: 14 }}>
+            <div>
+              <div style={{ marginBottom: 8, color: "#cbd5e1" }}>
+                Название конференции
+              </div>
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Например: Лекция по математике"
+                style={fieldStyle}
+              />
+            </div>
 
-          {createError && <p className="section-message section-message_error">{createError}</p>}
+            {createError && (
+              <div className="conference-message conference-message_error">
+                {createError}
+              </div>
+            )}
 
-          <button type="submit" className="section-button">
-            Создать конференцию
-          </button>
-        </form>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button
+                type="submit"
+                className="conference-secondary-btn"
+                style={secondaryButtonStyle}
+              >
+                Создать конференцию
+              </button>
 
-        {createdConference && (
-          <div className="section-created">
-            <p className="section-created-text">
-              Конференция создана. Код:{" "}
-              <span className="section-created-code">{createdConference.code}</span>
-            </p>
-            <button
-              type="button"
-              className="section-button section-button_secondary"
-              onClick={handleConnectCreated}
-            >
-              Подключиться как организатор
-            </button>
-          </div>
-        )}
-      </section>
+              {createdConference && (
+                <button
+                  type="button"
+                  className="conference-secondary-btn"
+                  style={secondaryButtonStyle}
+                  onClick={handleConnectCreated}
+                >
+                  Подключиться как организатор
+                </button>
+              )}
+            </div>
 
-      <section className="section-card">
-        <h2 className="section-card-title">Подключиться к конференции</h2>
-        <p className="section-card-subtitle">Введите код конференции.</p>
+            {createdConference && (
+              <div className="conference-message conference-message_success">
+                Конференция создана. Код: <b>{createdConference.code}</b>
+              </div>
+            )}
+          </form>
+        </section>
 
-        <form onSubmit={handleJoin} className="section-form">
-          <div className="section-field">
-            <label className="section-label">Код конференции</label>
-            <input
-              type="text"
-              className="section-input"
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value)}
-              placeholder="Например: AB12CD34"
-            />
-          </div>
+        <section className="conference-card" style={{ padding: 18 }}>
+          <h2 style={{ marginTop: 0 }}>Подключиться к конференции</h2>
+          <p style={{ color: "#9ca3af", marginTop: -6 }}>
+            Введите код конференции.
+          </p>
 
-          <div className="section-field">
-            <label className="section-label">Язык перевода</label>
-            <select
-              className="section-input"
-              value={joinLang}
-              onChange={(e) => setJoinLang(e.target.value)}
-            >
-              {LANGS.map((l) => (
-                <option key={l.code} value={l.code}>
-                  {l.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <form onSubmit={handleJoin} style={{ display: "grid", gap: 14 }}>
+            <div>
+              <div style={{ marginBottom: 8, color: "#cbd5e1" }}>Код конференции</div>
+              <input
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value)}
+                placeholder="Например: AB12CD34"
+                style={fieldStyle}
+              />
+            </div>
 
-          {joinError && <p className="section-message section-message_error">{joinError}</p>}
+            <div>
+              <div style={{ marginBottom: 8, color: "#cbd5e1" }}>Язык перевода</div>
+              <select
+                value={joinLang}
+                onChange={(e) => setJoinLang(e.target.value)}
+                style={selectStyle}
+              >
+                {LANGS.map((l) => (
+                  <option
+                    key={l.code}
+                    value={l.code}
+                    style={{ color: "#e5eefc", background: "#0f172a" }}
+                  >
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <button type="submit" className="section-button">
-            Подключиться
-          </button>
-        </form>
-      </section>
+            {joinError && (
+              <div className="conference-message conference-message_error">
+                {joinError}
+              </div>
+            )}
+
+            <div>
+              <button
+                type="submit"
+                className="conference-secondary-btn"
+                style={secondaryButtonStyle}
+              >
+                Подключиться
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
     </div>
   );
 }

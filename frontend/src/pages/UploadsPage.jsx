@@ -1,5 +1,3 @@
-// frontend/src/pages/UploadsPage.jsx
-
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import {
@@ -24,6 +22,45 @@ function prettyStage(stage) {
   return map[stage] || stage || "—";
 }
 
+function getLangText(lang) {
+  return lang?.name || lang?.label || lang?.code || "—";
+}
+
+const secondaryButtonStyle = {
+  minHeight: 40,
+  borderRadius: 999,
+  border: "1px solid rgba(148,163,184,0.22)",
+  background: "rgba(15,23,42,0.62)",
+  color: "#e5eefc",
+  padding: "0 16px",
+  fontWeight: 600,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
+};
+
+const fieldStyle = {
+  width: "100%",
+  minHeight: 42,
+  borderRadius: 999,
+  border: "1px solid rgba(148,163,184,0.22)",
+  background: "rgba(15,23,42,0.62)",
+  color: "#e5eefc",
+  padding: "0 14px",
+  outline: "none",
+  font: "inherit",
+  boxSizing: "border-box",
+};
+
+const selectStyle = {
+  ...fieldStyle,
+  appearance: "none",
+  WebkitAppearance: "none",
+  MozAppearance: "none",
+  colorScheme: "dark",
+};
+
 export function UploadsPage() {
   const { token } = useAuth();
 
@@ -42,11 +79,11 @@ export function UploadsPage() {
   const [uiSuccess, setUiSuccess] = useState("");
 
   const pollRef = useRef(null);
-
   const allowedHint = useMemo(() => "mp3, wav, m4a, mp4, webm, mov", []);
 
   useEffect(() => {
     let alive = true;
+
     (async () => {
       try {
         setLangLoading(true);
@@ -60,6 +97,7 @@ export function UploadsPage() {
         if (alive) setLangLoading(false);
       }
     })();
+
     return () => {
       alive = false;
     };
@@ -67,10 +105,12 @@ export function UploadsPage() {
 
   const startPolling = (id) => {
     stopPolling();
+
     pollRef.current = setInterval(async () => {
       try {
         const st = await fetchJobStatus(id, token);
         setStatus(st);
+
         if (st.status === "done" || st.status === "error") {
           stopPolling();
         }
@@ -113,15 +153,21 @@ export function UploadsPage() {
 
   const handleUpload = async () => {
     resetMessages();
+
     if (!file) {
       setUiError("Выберите файл для загрузки");
       return;
     }
+
     try {
       setBusy(true);
       const res = await uploadMediaFile(file, token);
       setJobId(res.id);
-      setStatus({ status: res.status, stage: "uploaded", progress: res.progress });
+      setStatus({
+        status: res.status,
+        stage: "uploaded",
+        progress: res.progress,
+      });
       setShowLangModal(true);
     } catch (e) {
       console.error(e);
@@ -133,7 +179,9 @@ export function UploadsPage() {
 
   const handleStart = async () => {
     resetMessages();
+
     if (!jobId) return;
+
     try {
       setBusy(true);
       await startUploadJob(jobId, selectedLang, token);
@@ -150,7 +198,9 @@ export function UploadsPage() {
 
   const handleDownload = async (format) => {
     resetMessages();
+
     if (!jobId) return;
+
     try {
       setBusy(true);
       await downloadJobResult(jobId, format, token);
@@ -164,7 +214,9 @@ export function UploadsPage() {
 
   const handleSaveNote = async () => {
     resetMessages();
+
     if (!jobId) return;
+
     try {
       setBusy(true);
       const res = await saveUploadToNotes(jobId, token);
@@ -184,71 +236,143 @@ export function UploadsPage() {
   return (
     <div className="page-inner">
       <h1 className="page-title">Загрузки</h1>
-      <p style={{ marginTop: -12, color: "#9ca3af" }}>
+
+      <p style={{ color: "#9ca3af", marginTop: -8, marginBottom: 18 }}>
         Загрузите аудио/видео и получите перевод в PDF/DOCX.
       </p>
 
-      {/* Карточка теперь идет под заголовком и НЕ уезжает вправо */}
-      <div className="uploads-card" style={{ marginTop: 18 }}>
-        <div className="uploads-label">Файл (поддерживаемые: {allowedHint})</div>
+      <div className="conference-card" style={{ padding: 18 }}>
+        <div style={{ marginBottom: 10, color: "#cbd5e1" }}>
+          Файл (поддерживаемые: {allowedHint})
+        </div>
 
-        <input type="file" onChange={handlePickFile} disabled={busy} />
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <label
+            className="conference-secondary-btn"
+            style={{ ...secondaryButtonStyle, cursor: "pointer" }}
+          >
+            Выбрать файл
+            <input
+              type="file"
+              accept=".mp3,.wav,.m4a,.mp4,.webm,.mov"
+              onChange={handlePickFile}
+              style={{ display: "none" }}
+            />
+          </label>
 
-        <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button className="conference-primary-btn" onClick={handleUpload} disabled={busy || !file}>
+          <button
+            type="button"
+            className="conference-secondary-btn"
+            style={secondaryButtonStyle}
+            onClick={handleUpload}
+            disabled={busy}
+          >
             Загрузить
           </button>
-          <button className="conference-secondary-btn" onClick={resetAll} disabled={busy}>
+
+          <button
+            type="button"
+            className="conference-secondary-btn"
+            style={secondaryButtonStyle}
+            onClick={resetAll}
+            disabled={busy}
+          >
             Сбросить
           </button>
         </div>
 
         {file && (
-          <div style={{ marginTop: 10, color: "#9ca3af", fontSize: 13 }}>
+          <div style={{ marginTop: 12, color: "#cbd5e1" }}>
             Выбран файл: <b>{file.name}</b>
           </div>
         )}
 
         {(jobId || status) && (
-          <div className="uploads-section" style={{ marginTop: 18 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-              <div>
-                <div style={{ color: "#9ca3af", fontSize: 13 }}>Задача</div>
-                <div style={{ fontSize: 18, fontWeight: 600 }}>#{jobId}</div>
-              </div>
+          <div
+            style={{
+              marginTop: 18,
+              padding: 16,
+              borderRadius: 16,
+              border: "1px solid rgba(148,163,184,0.18)",
+              background: "rgba(2,6,23,0.34)",
+            }}
+          >
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ color: "#9ca3af", fontSize: 13 }}>Задача</div>
+              <div style={{ fontWeight: 700 }}>#{jobId}</div>
+            </div>
 
+            <div style={{ display: "grid", gap: 10 }}>
               <div>
                 <div style={{ color: "#9ca3af", fontSize: 13 }}>Этап</div>
-                <div style={{ fontSize: 14 }}>{prettyStage(status?.stage)}</div>
+                <div>{prettyStage(status?.stage)}</div>
               </div>
 
               <div>
                 <div style={{ color: "#9ca3af", fontSize: 13 }}>Статус</div>
-                <div style={{ fontSize: 14 }}>
-                  {isDone ? "Готово" : isError ? "Ошибка" : "В процессе"} • {progress}%
+                <div>
+                  {isDone ? "Готово" : isError ? "Ошибка" : "В процессе"} •{" "}
+                  {progress}%
                 </div>
               </div>
+
+              <div
+                style={{
+                  width: "100%",
+                  height: 10,
+                  borderRadius: 999,
+                  background: "rgba(148,163,184,0.14)",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    width: `${progress}%`,
+                    height: "100%",
+                    borderRadius: 999,
+                    background: "linear-gradient(90deg, #60a5fa, #34d399)",
+                  }}
+                />
+              </div>
+
+              {status?.error_message && (
+                <div className="conference-message conference-message_error">
+                  {status.error_message}
+                </div>
+              )}
             </div>
 
-            {status?.error_message && (
-              <div className="conference-message conference-message_error" style={{ marginTop: 12 }}>
-                {status.error_message}
-              </div>
-            )}
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+              <button
+                type="button"
+                className="conference-secondary-btn"
+                style={secondaryButtonStyle}
+                onClick={() => handleDownload("pdf")}
+                disabled={!isDone || busy}
+              >
+                PDF
+              </button>
 
-            {isDone && (
-              <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <button className="conference-secondary-btn" onClick={() => handleDownload("docx")} disabled={busy}>
-                  Скачать DOCX
-                </button>
-                <button className="conference-secondary-btn" onClick={() => handleDownload("pdf")} disabled={busy}>
-                  Скачать PDF
-                </button>
-                <button className="conference-primary-btn" onClick={handleSaveNote} disabled={busy}>
-                  Сохранить в конспекты
-                </button>
-              </div>
-            )}
+              <button
+                type="button"
+                className="conference-secondary-btn"
+                style={secondaryButtonStyle}
+                onClick={() => handleDownload("docx")}
+                disabled={!isDone || busy}
+              >
+                DOCX
+              </button>
+
+              <button
+                type="button"
+                className="conference-secondary-btn"
+                style={secondaryButtonStyle}
+                onClick={handleSaveNote}
+                disabled={!isDone || busy}
+              >
+                Сохранить на сайте
+              </button>
+            </div>
           </div>
         )}
 
@@ -257,6 +381,7 @@ export function UploadsPage() {
             {uiError}
           </div>
         )}
+
         {uiSuccess && (
           <div className="conference-message conference-message_success" style={{ marginTop: 14 }}>
             {uiSuccess}
@@ -269,63 +394,67 @@ export function UploadsPage() {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.55)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            zIndex: 1200,
+            background: "rgba(2, 6, 23, 0.74)",
+            display: "grid",
+            placeItems: "center",
             padding: 16,
-            zIndex: 50,
           }}
         >
-          <div className="conference-card" style={{ width: "100%", maxWidth: 520, position: "relative" }}>
-            <button
-              onClick={() => setShowLangModal(false)}
-              aria-label="Закрыть"
-              disabled={busy}
-              style={{
-                position: "absolute",
-                top: 10,
-                right: 12,
-                border: "none",
-                background: "transparent",
-                color: "#9ca3af",
-                fontSize: 20,
-                cursor: "pointer",
-              }}
-            >
-              ✕
-            </button>
+          <div
+            className="conference-card"
+            style={{
+              width: "100%",
+              maxWidth: 520,
+              padding: 20,
+            }}
+          >
+            <h2 style={{ marginTop: 0 }}>Язык перевода</h2>
 
-            <h2 style={{ marginTop: 0 }}>Выберите язык перевода</h2>
+            <p style={{ color: "#9ca3af", marginTop: -6 }}>
+              Выберите язык, на который нужно перевести материал.
+            </p>
 
-            <div style={{ marginTop: 10 }}>
-              <div style={{ fontSize: 13, color: "#d1d5db", marginBottom: 6 }}>Язык</div>
+            <div style={{ marginTop: 12 }}>
               <select
                 value={selectedLang}
                 onChange={(e) => setSelectedLang(e.target.value)}
-                disabled={busy || langLoading}
-                className="conference-input"
+                style={selectStyle}
+                disabled={langLoading || busy}
               >
-                {languages.map((l) => (
-                  <option key={l.code} value={l.code}>
-                    {l.name} ({l.code})
+                {languages.map((lang) => (
+                  <option
+                    key={lang.code}
+                    value={lang.code}
+                    style={{ color: "#e5eefc", background: "#0f172a" }}
+                  >
+                    {getLangText(lang)}
                   </option>
                 ))}
               </select>
             </div>
 
-            <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button className="conference-primary-btn" onClick={handleStart} disabled={busy || !selectedLang}>
-                Начать перевод
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+              <button
+                type="button"
+                className="conference-secondary-btn"
+                style={secondaryButtonStyle}
+                onClick={handleStart}
+                disabled={busy || langLoading}
+              >
+                Начать обработку
               </button>
-              <button className="conference-secondary-btn" onClick={() => setShowLangModal(false)} disabled={busy}>
+
+              <button
+                type="button"
+                className="conference-secondary-btn"
+                style={secondaryButtonStyle}
+                onClick={() => setShowLangModal(false)}
+                disabled={busy}
+              >
                 Отмена
               </button>
             </div>
-
-            <p style={{ marginTop: 14, color: "#9ca3af", fontSize: 12 }}>
-              Если языков мало — позже расширим список.
-            </p>
           </div>
         </div>
       )}

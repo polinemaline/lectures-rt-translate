@@ -1,7 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { conferenceWsUrl, downloadExport, translateSegment } from "../api/conferences";
+import {
+  conferenceWsUrl,
+  downloadExport,
+  translateSegment,
+} from "../api/conferences";
 import { createNote } from "../services/notesService";
 
 const LANG_NAME = {
@@ -13,6 +17,20 @@ const LANG_NAME = {
   ita_Latn: "Italiano",
   por_Latn: "Português",
   tur_Latn: "Türkçe",
+};
+
+const secondaryButtonStyle = {
+  minHeight: 40,
+  borderRadius: 999,
+  border: "1px solid rgba(148,163,184,0.22)",
+  background: "rgba(15,23,42,0.62)",
+  color: "#e5eefc",
+  padding: "0 16px",
+  fontWeight: 600,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
 };
 
 function langHuman(code) {
@@ -37,7 +55,10 @@ function loadConferenceFromSession(code) {
 function saveConferenceToSession(conf) {
   try {
     if (!conf?.code) return;
-    window.sessionStorage.setItem(storageKeyForConference(conf.code), JSON.stringify(conf));
+    window.sessionStorage.setItem(
+      storageKeyForConference(conf.code),
+      JSON.stringify(conf)
+    );
   } catch {
     // ignore
   }
@@ -46,6 +67,7 @@ function saveConferenceToSession(conf) {
 function appendUniqueLine(setter, value) {
   const text = (value || "").trim();
   if (!text) return;
+
   setter((prev) => {
     if (prev.length > 0 && prev[prev.length - 1] === text) return prev;
     return [...prev, text];
@@ -125,7 +147,8 @@ export function ConferenceRoomPage() {
 
   useEffect(() => {
     if (!user) return;
-    const displayName = profile?.displayName || user.full_name || user.email || "Участник";
+    const displayName =
+      profile?.displayName || user.full_name || user.email || "Участник";
     const avatarUrl = profile?.avatarDataUrl || null;
     setParticipants([{ id: user.id ?? "me", name: displayName, avatarUrl }]);
   }, [user, profile]);
@@ -203,7 +226,9 @@ export function ConferenceRoomPage() {
       window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      setUiError("Ваш браузер не поддерживает SpeechRecognition. Используйте Chrome или Edge.");
+      setUiError(
+        "Ваш браузер не поддерживает SpeechRecognition. Используйте Chrome или Edge."
+      );
       return;
     }
 
@@ -308,7 +333,9 @@ export function ConferenceRoomPage() {
     };
 
     ws.onerror = () => {
-      setUiError("WebSocket соединение прервалось. Проверь код конференции и обнови страницу.");
+      setUiError(
+        "WebSocket соединение прервалось. Проверь код конференции и обнови страницу."
+      );
     };
 
     ws.onclose = () => {
@@ -324,7 +351,10 @@ export function ConferenceRoomPage() {
         setOriginalPartial("");
 
         if (!isOrganizer) {
-          if (Array.isArray(msg.translated_items) && msg.translated_items.length === items.length) {
+          if (
+            Array.isArray(msg.translated_items) &&
+            msg.translated_items.length === items.length
+          ) {
             setTranslatedLines(msg.translated_items);
           } else {
             const out = [];
@@ -365,7 +395,9 @@ export function ConferenceRoomPage() {
         if (!isOrganizer) {
           if (typeof msg.translated === "string") {
             appendUniqueLine(setTranslatedLines, msg.translated || "");
-            setTranslatedPartial((prev) => (prev === (msg.translated || "") ? "" : prev));
+            setTranslatedPartial((prev) =>
+              prev === (msg.translated || "") ? "" : prev
+            );
           } else {
             try {
               const tr = await translateSegment(text, srcLang, tgtLang);
@@ -428,7 +460,9 @@ export function ConferenceRoomPage() {
 
   const doExport = (format) => {
     const original_text = [...originalLines, originalPartial].filter(Boolean).join("\n");
-    const translated_text = [...translatedLines, translatedPartial].filter(Boolean).join("\n");
+    const translated_text = [...translatedLines, translatedPartial]
+      .filter(Boolean)
+      .join("\n");
     downloadExport(code, format, srcLang, tgtLang, original_text, translated_text);
   };
 
@@ -443,7 +477,9 @@ export function ConferenceRoomPage() {
         original_language: srcLang,
         target_language: tgtLang,
         original_text: [...originalLines, originalPartial].filter(Boolean).join("\n"),
-        translated_text: [...translatedLines, translatedPartial].filter(Boolean).join("\n"),
+        translated_text: [...translatedLines, translatedPartial]
+          .filter(Boolean)
+          .join("\n"),
       };
       await createNote(payload, token);
       setUiSuccess("Сохранено в конспекты");
@@ -476,7 +512,11 @@ export function ConferenceRoomPage() {
       </div>
 
       <div style={{ marginTop: 14 }}>
-        <button className="conference-secondary-btn" onClick={handleExit}>
+        <button
+          className="conference-secondary-btn"
+          style={secondaryButtonStyle}
+          onClick={handleExit}
+        >
           {isOrganizer ? "Выйти" : "Выйти из конференции"}
         </button>
       </div>
@@ -489,12 +529,17 @@ export function ConferenceRoomPage() {
           </p>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button className="conference-primary-btn" onClick={toggleMic}>
+            <button
+              className="conference-secondary-btn"
+              style={secondaryButtonStyle}
+              onClick={toggleMic}
+            >
               {micOn ? "Микрофон: ВЫКЛ" : "Микрофон: ВКЛ"}
             </button>
 
             <button
               className="conference-secondary-btn"
+              style={secondaryButtonStyle}
               onClick={() => {
                 stopMic();
                 sendJson({ type: "end" });
@@ -522,7 +567,11 @@ export function ConferenceRoomPage() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
-            <button className="conference-secondary-btn" onClick={() => scrollByCards("left")}>
+            <button
+              className="conference-secondary-btn"
+              style={secondaryButtonStyle}
+              onClick={() => scrollByCards("left")}
+            >
               ◀
             </button>
 
@@ -565,7 +614,11 @@ export function ConferenceRoomPage() {
                     }}
                   >
                     {p.avatarUrl ? (
-                      <img src={p.avatarUrl} alt="avatar" style={{ width: "100%", height: "100%" }} />
+                      <img
+                        src={p.avatarUrl}
+                        alt="avatar"
+                        style={{ width: "100%", height: "100%" }}
+                      />
                     ) : (
                       <span>{p.name?.[0]?.toUpperCase() ?? "?"}</span>
                     )}
@@ -576,7 +629,11 @@ export function ConferenceRoomPage() {
               ))}
             </div>
 
-            <button className="conference-secondary-btn" onClick={() => scrollByCards("right")}>
+            <button
+              className="conference-secondary-btn"
+              style={secondaryButtonStyle}
+              onClick={() => scrollByCards("right")}
+            >
               ▶
             </button>
           </div>
@@ -643,16 +700,33 @@ export function ConferenceRoomPage() {
           </p>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button className="conference-secondary-btn" onClick={() => doExport("pdf")}>
+            <button
+              className="conference-secondary-btn"
+              style={secondaryButtonStyle}
+              onClick={() => doExport("pdf")}
+            >
               Сохранить PDF
             </button>
-            <button className="conference-secondary-btn" onClick={() => doExport("docx")}>
+            <button
+              className="conference-secondary-btn"
+              style={secondaryButtonStyle}
+              onClick={() => doExport("docx")}
+            >
               Сохранить DOCX
             </button>
-            <button className="conference-primary-btn" onClick={handleSaveToSite} disabled={busy}>
+            <button
+              className="conference-secondary-btn"
+              style={secondaryButtonStyle}
+              onClick={handleSaveToSite}
+              disabled={busy}
+            >
               Сохранить на сайте
             </button>
-            <button className="conference-secondary-btn" onClick={goBackToList}>
+            <button
+              className="conference-secondary-btn"
+              style={secondaryButtonStyle}
+              onClick={goBackToList}
+            >
               Вернуться к конференциям
             </button>
           </div>

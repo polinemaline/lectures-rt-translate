@@ -1,15 +1,48 @@
-// frontend/src/pages/ProfilePage.jsx
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { useNavigate } from "react-router-dom";
+
+const secondaryButtonStyle = {
+  minHeight: 40,
+  borderRadius: 999,
+  border: "1px solid rgba(148,163,184,0.22)",
+  background: "rgba(15,23,42,0.62)",
+  color: "#e5eefc",
+  padding: "0 16px",
+  fontWeight: 600,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
+};
+
+const fieldStyle = {
+  width: "100%",
+  minHeight: 42,
+  borderRadius: 999,
+  border: "1px solid rgba(148,163,184,0.22)",
+  background: "rgba(15,23,42,0.62)",
+  color: "#e5eefc",
+  padding: "0 14px",
+  outline: "none",
+  font: "inherit",
+  boxSizing: "border-box",
+};
+
+function isValidEmail(value) {
+  const v = String(value || "").trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+}
 
 export function ProfilePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
   const [displayName, setDisplayName] = useState("");
+  const [profileEmail, setProfileEmail] = useState("");
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const storedName =
@@ -19,8 +52,11 @@ export function ProfilePage() {
       "";
 
     const storedAvatar = localStorage.getItem("profile_avatar");
+    const storedEmail = localStorage.getItem("profile_email") || user?.email || "";
 
     setDisplayName(storedName);
+    setProfileEmail(storedEmail);
+
     if (storedAvatar) {
       setAvatarPreview(storedAvatar);
     }
@@ -28,9 +64,27 @@ export function ProfilePage() {
 
   const handleSave = (e) => {
     e.preventDefault();
-    localStorage.setItem("profile_display_name", displayName.trim());
+    setError("");
+    setMessage("");
+
+    const trimmedName = displayName.trim();
+    const trimmedEmail = profileEmail.trim();
+
+    if (!trimmedEmail) {
+      setError("Введите e-mail");
+      return;
+    }
+
+    if (!isValidEmail(trimmedEmail)) {
+      setError("Введите корректный e-mail");
+      return;
+    }
+
+    localStorage.setItem("profile_display_name", trimmedName);
+    localStorage.setItem("profile_email", trimmedEmail);
+
     setMessage("Профиль сохранён");
-    setTimeout(() => setMessage(""), 2000);
+    setTimeout(() => setMessage(""), 2200);
   };
 
   const handleAvatarChange = (e) => {
@@ -46,84 +100,155 @@ export function ProfilePage() {
     reader.readAsDataURL(file);
   };
 
+  const initial = useMemo(() => {
+    const source =
+      displayName?.trim() ||
+      profileEmail?.trim() ||
+      user?.email?.trim() ||
+      "U";
+    return source[0]?.toUpperCase() || "U";
+  }, [displayName, profileEmail, user?.email]);
+
   if (!user) {
-    return (
-      <div className="profile-page">
-        <div className="profile-card">
-          <p>Вы не авторизованы.</p>
-        </div>
-      </div>
-    );
+    return <div className="page-inner">Вы не авторизованы.</div>;
   }
 
-  const initial =
-    (displayName && displayName[0].toUpperCase()) ||
-    (user.email && user.email[0].toUpperCase()) ||
-    "U";
-
   return (
-    <div className="profile-page">
-      <div className="profile-card">
-        {/* крестик закрытия */}
-        <button
-          type="button"
-          className="profile-close"
-          onClick={() => navigate(-1)}
+    <div className="page-inner">
+      <div
+        className="conference-card"
+        style={{
+          maxWidth: 760,
+          margin: "0 auto",
+          padding: 22,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            marginBottom: 8,
+          }}
         >
-          ×
-        </button>
+          <button
+            type="button"
+            className="conference-secondary-btn"
+            style={secondaryButtonStyle}
+            onClick={() => navigate(-1)}
+            title="Закрыть"
+          >
+            ×
+          </button>
+        </div>
 
-        <h1 className="profile-title">Профиль пользователя</h1>
-        <p className="profile-subtitle">
-          Здесь вы можете изменить отображаемое имя и фото профиля.
+        <h1 className="page-title" style={{ marginTop: 0 }}>
+          Профиль пользователя
+        </h1>
+
+        <p style={{ color: "#9ca3af", marginTop: -6 }}>
+          Здесь вы можете изменить отображаемое имя, e-mail и фото профиля.
         </p>
 
-        <form onSubmit={handleSave} className="profile-form">
-          <div className="profile-avatar-block">
-            <div className="profile-avatar-preview">
+        <form
+          onSubmit={handleSave}
+          style={{
+            display: "grid",
+            gap: 18,
+            marginTop: 18,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              gap: 18,
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
+            <div
+              style={{
+                width: 88,
+                height: 88,
+                borderRadius: "50%",
+                overflow: "hidden",
+                background: "rgba(15,23,42,0.9)",
+                border: "1px solid rgba(148,163,184,0.22)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 28,
+                fontWeight: 700,
+              }}
+            >
               {avatarPreview ? (
-                <img src={avatarPreview} alt="Аватар" />
+                <img
+                  src={avatarPreview}
+                  alt="avatar"
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
               ) : (
                 <span>{initial}</span>
               )}
             </div>
-            <label className="profile-avatar-label">
-              <span className="profile-avatar-button">Выбрать фото</span>
+
+            <label
+              className="conference-secondary-btn"
+              style={{ ...secondaryButtonStyle, cursor: "pointer" }}
+            >
+              Выбрать фото
               <input
                 type="file"
                 accept="image/*"
                 onChange={handleAvatarChange}
-                className="profile-avatar-input"
+                style={{ display: "none" }}
               />
             </label>
           </div>
 
-          <div className="profile-field">
-            <label className="profile-label">E-mail</label>
+          <div>
+            <div style={{ marginBottom: 8, color: "#cbd5e1" }}>E-mail</div>
             <input
               type="email"
-              className="profile-input"
-              value={user.email}
-              disabled
+              value={profileEmail}
+              onChange={(e) => setProfileEmail(e.target.value)}
+              placeholder="example@mail.com"
+              style={fieldStyle}
             />
           </div>
 
-          <div className="profile-field">
-            <label className="profile-label">Отображаемое имя</label>
+          <div>
+            <div style={{ marginBottom: 8, color: "#cbd5e1" }}>
+              Отображаемое имя
+            </div>
             <input
-              type="text"
-              className="profile-input"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder="Имя, которое будет видно в конференциях"
+              style={fieldStyle}
             />
           </div>
 
-          <button type="submit" className="profile-save-button">
-            Сохранить
-          </button>
+          {error && (
+            <div className="conference-message conference-message_error">
+              {error}
+            </div>
+          )}
 
-          {message && <p className="profile-message">{message}</p>}
+          {message && (
+            <div className="conference-message conference-message_success">
+              {message}
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button
+              type="submit"
+              className="conference-secondary-btn"
+              style={secondaryButtonStyle}
+            >
+              Сохранить
+            </button>
+          </div>
         </form>
       </div>
     </div>

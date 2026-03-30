@@ -42,8 +42,11 @@ export async function deleteNote(noteId, token) {
 }
 
 export async function downloadNoteExport(noteId, format, token) {
-  const base =
-    (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE || "").replace(/\/$/, "");
+  const base = (
+    import.meta.env.VITE_API_URL ||
+    import.meta.env.VITE_API_BASE ||
+    ""
+  ).replace(/\/$/, "");
   const url = `${base}/api/notes/${noteId}/export?format=${format}`;
 
   const res = await fetch(url, {
@@ -58,7 +61,10 @@ export async function downloadNoteExport(noteId, format, token) {
     try {
       const data = await res.json();
       if (data?.detail) {
-        msg = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
+        msg =
+          typeof data.detail === "string"
+            ? data.detail
+            : JSON.stringify(data.detail);
       } else {
         msg = JSON.stringify(data);
       }

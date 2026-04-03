@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
+
 import {
   conferenceWsUrl,
+  defaultIceServers,
   downloadExport,
   translateSegment,
 } from "../api/conferences";
+import { useAuth } from "../auth/AuthContext";
 import { createNote } from "../services/notesService";
 
 const LANG_NAME = {
@@ -19,17 +21,102 @@ const LANG_NAME = {
   tur_Latn: "Türkçe",
 };
 
-const secondaryButtonStyle = {
-  minHeight: 40,
+const pageStyle = {
+  display: "grid",
+  gap: 16,
+  padding: "8px 0 24px",
+};
+
+const cardStyle = {
+  background: "rgba(15, 23, 42, 0.72)",
+  border: "1px solid rgba(148, 163, 184, 0.18)",
+  borderRadius: 24,
+  padding: 20,
+  boxShadow: "0 18px 44px rgba(15, 23, 42, 0.18)",
+};
+
+const panelTitleStyle = {
+  margin: 0,
+  fontSize: 20,
+  fontWeight: 700,
+  color: "#f8fafc",
+};
+
+const mutedStyle = {
+  margin: 0,
+  color: "#94a3b8",
+  lineHeight: 1.5,
+};
+
+const primaryButtonStyle = {
+  minHeight: 42,
   borderRadius: 999,
-  border: "1px solid rgba(148,163,184,0.22)",
-  background: "rgba(15,23,42,0.62)",
+  border: "none",
+  background: "linear-gradient(135deg, #38bdf8, #818cf8)",
+  color: "#0f172a",
+  padding: "0 18px",
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const secondaryButtonStyle = {
+  minHeight: 42,
+  borderRadius: 999,
+  border: "1px solid rgba(148, 163, 184, 0.24)",
+  background: "rgba(15, 23, 42, 0.62)",
   color: "#e5eefc",
-  padding: "0 16px",
+  padding: "0 18px",
   fontWeight: 600,
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
+  cursor: "pointer",
+};
+
+const dangerButtonStyle = {
+  ...secondaryButtonStyle,
+  border: "1px solid rgba(248, 113, 113, 0.35)",
+  color: "#fecaca",
+};
+
+const videoWrapStyle = {
+  width: "100%",
+  maxWidth: 860,
+  margin: "0 auto",
+};
+
+const videoStyle = {
+  width: "100%",
+  aspectRatio: "16 / 9",
+  maxHeight: 360,
+  borderRadius: 18,
+  background: "#020617",
+  objectFit: "contain",
+  display: "block",
+};
+
+const listCardStyle = {
+  borderRadius: 18,
+  border: "1px solid rgba(148, 163, 184, 0.16)",
+  background: "rgba(2, 6, 23, 0.35)",
+  padding: 14,
+  maxHeight: 240,
+  overflowY: "auto",
+  scrollBehavior: "smooth",
+};
+
+const participantListStyle = {
+  display: "grid",
+  gap: 8,
+};
+
+const participantRowStyle = {
+  borderRadius: 14,
+  border: "1px solid rgba(148, 163, 184, 0.16)",
+  background: "rgba(2, 6, 23, 0.35)",
+  padding: "10px 12px",
+  color: "#f8fafc",
+};
+
+const subtitlesCardContentStyle = {
+  display: "grid",
   gap: 8,
 };
 
@@ -42,23 +129,29 @@ function storageKeyForConference(code) {
   return `conference:${code}`;
 }
 
-function loadConferenceFromSession(code) {
-  try {
-    const raw = window.sessionStorage.getItem(storageKeyForConference(code));
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch {
-    return null;
+function loadConferenceFromStorage(code) {
+  if (!code) return null;
+
+  for (const storage of [window.sessionStorage, window.localStorage]) {
+    try {
+      const raw = storage.getItem(storageKeyForConference(code));
+      if (raw) {
+        return JSON.parse(raw);
+      }
+    } catch {
+      // ignore broken storage
+    }
   }
+
+  return null;
 }
 
-function saveConferenceToSession(conf) {
+function saveConferenceToStorage(conf) {
   try {
     if (!conf?.code) return;
-    window.sessionStorage.setItem(
-      storageKeyForConference(conf.code),
-      JSON.stringify(conf)
-    );
+    const raw = JSON.stringify(conf);
+    window.sessionStorage.setItem(storageKeyForConference(conf.code), raw);
+    window.localStorage.setItem(storageKeyForConference(conf.code), raw);
   } catch {
     // ignore
   }
@@ -69,16 +162,82 @@ function appendUniqueLine(setter, value) {
   if (!text) return;
 
   setter((prev) => {
-    if (prev.length > 0 && prev[prev.length - 1] === text) return prev;
+    if (prev.length > 0 && prev[prev.length - 1] === text) {
+      return prev;
+    }
     return [...prev, text];
   });
+}
+
+function browserSttLang(srcLang) {
+  if (srcLang === "rus_Cyrl") return "ru-RU";
+  if (srcLang === "eng_Latn") return "en-US";
+  if (srcLang === "deu_Latn") return "de-DE";
+  if (srcLang === "fra_Latn") return "fr-FR";
+  if (srcLang === "spa_Latn") return "es-ES";
+  if (srcLang === "ita_Latn") return "it-IT";
+  if (srcLang === "por_Latn") return "pt-PT";
+  if (srcLang === "tur_Latn") return "tr-TR";
+  return "en-US";
+}
+
+function pickDisplayName({ profile, user, isOrganizer }) {
+  const candidate =
+    profile?.full_name ||
+    profile?.name ||
+    profile?.username ||
+    user?.full_name ||
+    user?.name ||
+    user?.display_name ||
+    user?.username ||
+    user?.email ||
+    "";
+
+  const normalized = String(candidate || "").trim();
+  if (normalized) return normalized;
+  return isOrganizer ? "Организатор" : "Участник";
+}
+
+function normalizeParticipants(items) {
+  if (!Array.isArray(items)) return [];
+  const seen = new Set();
+
+  return items
+    .map((item, index) => {
+      const clientId = String(item?.client_id || "").trim();
+      if (!clientId || seen.has(clientId)) return null;
+      seen.add(clientId);
+
+      const displayName = String(item?.display_name || "").trim() || `Участник ${index + 1}`;
+      return {
+        client_id: clientId,
+        display_name: displayName,
+      };
+    })
+    .filter(Boolean);
+}
+
+function renderSubtitleLines(lines, partial) {
+  return (
+    <>
+      {lines.map((line, index) => (
+        <p key={`${index}-${line}`} style={{ margin: "0 0 10px", color: "#f8fafc" }}>
+          {line}
+        </p>
+      ))}
+      {partial && <p style={{ margin: 0, color: "#38bdf8" }}>{partial}</p>}
+      {lines.length === 0 && !partial && (
+        <p style={{ ...mutedStyle, color: "#94a3b8" }}>Пока нет субтитров.</p>
+      )}
+    </>
+  );
 }
 
 export function ConferenceRoomPage() {
   const { code } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile, token } = useAuth();
+  const { token, user, profile } = useAuth();
 
   const roleParam = useMemo(() => {
     try {
@@ -88,14 +247,11 @@ export function ConferenceRoomPage() {
     }
   }, [location.search]);
 
-  const storedConference = useMemo(() => {
-    if (!code) return null;
-    return loadConferenceFromSession(code);
-  }, [code]);
+  const storedConference = useMemo(() => loadConferenceFromStorage(code), [code]);
 
   const conference = useMemo(() => {
-    const stateConf = location.state?.conference || null;
-    const base = stateConf || storedConference;
+    const stateConference = location.state?.conference || null;
+    const base = stateConference || storedConference;
     const fallback = base || {
       code,
       title: "Конференция",
@@ -104,14 +260,19 @@ export function ConferenceRoomPage() {
       src_language: "rus_Cyrl",
     };
 
-    if (roleParam === "organizer") return { ...fallback, is_organizer: true };
-    if (roleParam === "participant") return { ...fallback, is_organizer: false };
+    if (roleParam === "organizer") {
+      return { ...fallback, is_organizer: true };
+    }
+    if (roleParam === "participant") {
+      return { ...fallback, is_organizer: false };
+    }
     return fallback;
-  }, [code, location.state, storedConference, roleParam]);
+  }, [code, location.state, roleParam, storedConference]);
 
   useEffect(() => {
-    if (!conference?.code) return;
-    saveConferenceToSession(conference);
+    if (conference?.code) {
+      saveConferenceToStorage(conference);
+    }
   }, [conference]);
 
   const title = conference?.title ?? "Конференция";
@@ -119,73 +280,224 @@ export function ConferenceRoomPage() {
   const srcLang = conference?.src_language ?? "rus_Cyrl";
   const tgtLang = conference?.target_language ?? "eng_Latn";
 
-  const [participants, setParticipants] = useState([]);
-  const listRef = useRef(null);
+  const currentDisplayName = useMemo(
+    () => pickDisplayName({ profile, user, isOrganizer }),
+    [profile, user, isOrganizer],
+  );
 
   const [originalLines, setOriginalLines] = useState([]);
   const [translatedLines, setTranslatedLines] = useState([]);
   const [originalPartial, setOriginalPartial] = useState("");
   const [translatedPartial, setTranslatedPartial] = useState("");
   const [confStatus, setConfStatus] = useState("active");
+  const [micOn, setMicOn] = useState(false);
+  const [socketReady, setSocketReady] = useState(false);
+  const [uiError, setUiError] = useState("");
+  const [uiSuccess, setUiSuccess] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [participants, setParticipants] = useState([]);
+  const [screenShareActive, setScreenShareActive] = useState(false);
+  const [screenShareBusy, setScreenShareBusy] = useState(false);
+  const [localPreviewStream, setLocalPreviewStream] = useState(null);
+  const [remoteScreenStream, setRemoteScreenStream] = useState(null);
 
   const wsRef = useRef(null);
   const recognitionRef = useRef(null);
   const restartTimerRef = useRef(null);
   const lastPartialSentRef = useRef("");
   const micOnRef = useRef(false);
-
-  const [micOn, setMicOn] = useState(false);
-  const [socketReady, setSocketReady] = useState(false);
-
-  const [uiError, setUiError] = useState("");
-  const [uiSuccess, setUiSuccess] = useState("");
-  const [busy, setBusy] = useState(false);
+  const participantIdsRef = useRef([]);
+  const peerConnectionsRef = useRef(new Map());
+  const pendingIceCandidatesRef = useRef(new Map());
+  const localScreenStreamRef = useRef(null);
+  const localPreviewRef = useRef(null);
+  const remoteVideoRef = useRef(null);
+  const originalListRef = useRef(null);
+  const translatedListRef = useRef(null);
 
   useEffect(() => {
     micOnRef.current = micOn;
   }, [micOn]);
 
   useEffect(() => {
-    if (!user) return;
-    const displayName =
-      profile?.displayName || user.full_name || user.email || "Участник";
-    const avatarUrl = profile?.avatarDataUrl || null;
-    setParticipants([{ id: user.id ?? "me", name: displayName, avatarUrl }]);
-  }, [user, profile]);
+    participantIdsRef.current = participants.map((item) => item.client_id);
+  }, [participants]);
 
-  const sttLang = useMemo(() => {
-    if (srcLang === "rus_Cyrl") return "ru-RU";
-    if (srcLang === "eng_Latn") return "en-US";
-    if (srcLang === "deu_Latn") return "de-DE";
-    if (srcLang === "fra_Latn") return "fr-FR";
-    if (srcLang === "spa_Latn") return "es-ES";
-    if (srcLang === "ita_Latn") return "it-IT";
-    if (srcLang === "por_Latn") return "pt-PT";
-    if (srcLang === "tur_Latn") return "tr-TR";
-    return "en-US";
-  }, [srcLang]);
+  const sttLang = useMemo(() => browserSttLang(srcLang), [srcLang]);
 
   const sendJson = (payload) => {
     if (wsRef.current?.readyState !== WebSocket.OPEN) return;
     wsRef.current.send(JSON.stringify(payload));
   };
 
-  const clearRestartTimer = () => {
+  useEffect(() => {
+    const video = localPreviewRef.current;
+    if (!video) return;
+
+    video.srcObject = localPreviewStream || null;
+
+    if (localPreviewStream) {
+      video.play().catch(() => {
+        // ignore autoplay errors
+      });
+    }
+  }, [localPreviewStream, screenShareActive]);
+
+  useEffect(() => {
+    const video = remoteVideoRef.current;
+    if (!video) return;
+
+    video.srcObject = remoteScreenStream || null;
+
+    if (remoteScreenStream) {
+      video.play().catch(() => {
+        // ignore autoplay errors
+      });
+    }
+  }, [remoteScreenStream, screenShareActive]);
+
+  useEffect(() => {
+    const node = originalListRef.current;
+    if (!node) return;
+    node.scrollTop = node.scrollHeight;
+  }, [originalLines, originalPartial]);
+
+  useEffect(() => {
+    const node = translatedListRef.current;
+    if (!node) return;
+    node.scrollTop = node.scrollHeight;
+  }, [translatedLines, translatedPartial]);
+
+  const closePeerConnection = (peerId) => {
+    const pc = peerConnectionsRef.current.get(peerId);
+    if (!pc) return;
+
+    try {
+      pc.onicecandidate = null;
+      pc.ontrack = null;
+      pc.onconnectionstatechange = null;
+      pc.close();
+    } catch {
+      // ignore
+    }
+
+    peerConnectionsRef.current.delete(peerId);
+    pendingIceCandidatesRef.current.delete(peerId);
+  };
+
+  const closeAllPeerConnections = () => {
+    for (const peerId of Array.from(peerConnectionsRef.current.keys())) {
+      closePeerConnection(peerId);
+    }
+  };
+
+  const queueIceCandidate = (peerId, candidate) => {
+    if (!candidate) return;
+    const map = pendingIceCandidatesRef.current;
+    const list = map.get(peerId) || [];
+    list.push(candidate);
+    map.set(peerId, list);
+  };
+
+  const flushPendingIceCandidates = async (peerId, pc) => {
+    const list = pendingIceCandidatesRef.current.get(peerId) || [];
+    if (!list.length) return;
+
+    for (const candidate of list) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (error) {
+        console.error("ICE flush error", error);
+      }
+    }
+
+    pendingIceCandidatesRef.current.delete(peerId);
+  };
+
+  const clearRemoteScreen = () => {
+    setRemoteScreenStream(null);
+    if (!isOrganizer) {
+      closeAllPeerConnections();
+    }
+  };
+
+  const ensurePeerConnection = (peerId) => {
+    const existing = peerConnectionsRef.current.get(peerId);
+    if (existing) {
+      return existing;
+    }
+
+    const pc = new RTCPeerConnection({ iceServers: defaultIceServers() });
+
+    pc.onicecandidate = (event) => {
+      if (!event.candidate) return;
+      sendJson({
+        type: "webrtc_ice_candidate",
+        target_client_id: peerId,
+        candidate: event.candidate,
+      });
+    };
+
+    pc.ontrack = (event) => {
+      if (isOrganizer) return;
+      const [stream] = event.streams || [];
+      if (stream) {
+        setRemoteScreenStream(stream);
+        setScreenShareActive(true);
+      }
+    };
+
+    pc.onconnectionstatechange = () => {
+      if (["failed", "closed", "disconnected"].includes(pc.connectionState)) {
+        if (!isOrganizer) {
+          setRemoteScreenStream(null);
+        }
+      }
+    };
+
+    peerConnectionsRef.current.set(peerId, pc);
+    return pc;
+  };
+
+  const attachStreamToPeer = async (pc, stream) => {
+    for (const track of stream.getTracks()) {
+      const sender = pc.getSenders().find((item) => item.track?.kind === track.kind);
+      if (sender) {
+        await sender.replaceTrack(track);
+      } else {
+        pc.addTrack(track, stream);
+      }
+    }
+  };
+
+  const sendOfferToParticipant = async (participantId) => {
+    const stream = localScreenStreamRef.current;
+    if (!stream) return;
+
+    const pc = ensurePeerConnection(participantId);
+    await attachStreamToPeer(pc, stream);
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    sendJson({
+      type: "webrtc_offer",
+      target_client_id: participantId,
+      sdp: offer,
+    });
+  };
+
+  const stopRecognition = () => {
     if (restartTimerRef.current) {
       clearTimeout(restartTimerRef.current);
       restartTimerRef.current = null;
     }
-  };
-
-  const stopRecognition = () => {
-    clearRestartTimer();
 
     try {
       if (recognitionRef.current) {
         recognitionRef.current.onresult = null;
-        recognitionRef.current.onend = null;
         recognitionRef.current.onerror = null;
-        recognitionRef.current.onstart = null;
+        recognitionRef.current.onend = null;
       }
     } catch {
       // ignore
@@ -206,40 +518,25 @@ export function ConferenceRoomPage() {
     recognitionRef.current = null;
   };
 
-  const scheduleRecognitionRestart = () => {
-    if (!isOrganizer) return;
-    if (!micOnRef.current) return;
-    if (!socketReady) return;
-
-    clearRestartTimer();
-    restartTimerRef.current = setTimeout(() => {
-      startRecognition();
-    }, 700);
-  };
-
   const startRecognition = () => {
-    if (!isOrganizer) return;
-    if (!micOnRef.current) return;
-    if (!socketReady) return;
+    if (!isOrganizer || !micOnRef.current || !socketReady) return;
 
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       setUiError(
-        "Ваш браузер не поддерживает SpeechRecognition. Используйте Chrome или Edge."
+        "Ваш браузер не поддерживает SpeechRecognition. Используйте Chrome или Edge.",
       );
       return;
     }
 
     stopRecognition();
 
-    const rec = new SpeechRecognition();
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.lang = sttLang;
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = sttLang;
 
-    rec.onresult = (event) => {
+    recognition.onresult = (event) => {
       let interimText = "";
       const finalTexts = [];
 
@@ -256,7 +553,6 @@ export function ConferenceRoomPage() {
       }
 
       setOriginalPartial(interimText);
-
       if (interimText !== lastPartialSentRef.current) {
         lastPartialSentRef.current = interimText;
         sendJson({ type: "segment_partial", text: interimText });
@@ -271,31 +567,31 @@ export function ConferenceRoomPage() {
       }
     };
 
-    rec.onerror = () => {
-      scheduleRecognitionRestart();
+    recognition.onerror = () => {
+      if (!micOnRef.current || !socketReady) return;
+      restartTimerRef.current = setTimeout(() => startRecognition(), 700);
     };
 
-    rec.onend = () => {
-      scheduleRecognitionRestart();
+    recognition.onend = () => {
+      if (!micOnRef.current || !socketReady) return;
+      restartTimerRef.current = setTimeout(() => startRecognition(), 700);
     };
 
     try {
-      rec.start();
-      recognitionRef.current = rec;
+      recognition.start();
+      recognitionRef.current = recognition;
       setUiError("");
     } catch {
-      scheduleRecognitionRestart();
+      restartTimerRef.current = setTimeout(() => startRecognition(), 700);
     }
   };
 
   const startMic = async () => {
     if (!isOrganizer) return;
-
     if (!socketReady) {
       setUiError("WebSocket ещё не готов. Подождите секунду и попробуйте снова.");
       return;
     }
-
     micOnRef.current = true;
     setMicOn(true);
     setUiError("");
@@ -311,8 +607,79 @@ export function ConferenceRoomPage() {
     sendJson({ type: "segment_partial", text: "" });
   };
 
+  const stopScreenShare = (notifyServer = true) => {
+    const stream = localScreenStreamRef.current;
+    if (stream) {
+      for (const track of stream.getTracks()) {
+        try {
+          track.onended = null;
+          track.stop();
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    localScreenStreamRef.current = null;
+    setLocalPreviewStream(null);
+    closeAllPeerConnections();
+    setScreenShareActive(false);
+    setScreenShareBusy(false);
+
+    if (notifyServer) {
+      sendJson({ type: "screen_share_stopped" });
+    }
+  };
+
+  const startScreenShare = async () => {
+    if (!isOrganizer) return;
+    if (!socketReady) {
+      setUiError("Сначала дождитесь подключения WebSocket.");
+      return;
+    }
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      setUiError("Ваш браузер не поддерживает демонстрацию экрана.");
+      return;
+    }
+
+    setScreenShareBusy(true);
+    setUiError("");
+
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          frameRate: 15,
+        },
+        audio: false,
+      });
+
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.onended = () => {
+          stopScreenShare();
+        };
+      }
+
+      localScreenStreamRef.current = stream;
+      setLocalPreviewStream(stream);
+      setScreenShareActive(true);
+
+      sendJson({ type: "screen_share_started" });
+
+      for (const participantId of participantIdsRef.current) {
+        await sendOfferToParticipant(participantId);
+      }
+    } catch (error) {
+      console.error(error);
+      setUiError(error?.message || "Не удалось начать демонстрацию экрана.");
+      stopScreenShare(false);
+    } finally {
+      setScreenShareBusy(false);
+    }
+  };
+
   useEffect(() => {
-    if (!code) return;
+    if (!code) return undefined;
 
     const ws = new WebSocket(conferenceWsUrl(code));
     wsRef.current = ws;
@@ -321,34 +688,43 @@ export function ConferenceRoomPage() {
       setSocketReady(true);
       setUiError("");
 
-      const joinMsg = {
+      const joinMessage = {
         type: "join",
         role: isOrganizer ? "organizer" : "participant",
+        display_name: currentDisplayName,
       };
 
-      if (isOrganizer) joinMsg.src_lang = srcLang;
-      else joinMsg.tgt_lang = tgtLang;
+      if (isOrganizer) {
+        joinMessage.src_lang = srcLang;
+      } else {
+        joinMessage.tgt_lang = tgtLang;
+      }
 
-      ws.send(JSON.stringify(joinMsg));
+      ws.send(JSON.stringify(joinMessage));
     };
 
     ws.onerror = () => {
-      setUiError(
-        "WebSocket соединение прервалось. Проверь код конференции и обнови страницу."
-      );
+      setUiError("WebSocket соединение прервалось. Проверьте код конференции и обновите страницу.");
     };
 
     ws.onclose = () => {
       setSocketReady(false);
     };
 
-    ws.onmessage = async (ev) => {
-      const msg = JSON.parse(ev.data);
+    ws.onmessage = async (event) => {
+      const msg = JSON.parse(event.data);
+
+      if (msg.type === "error") {
+        setUiError(msg.message || "Ошибка соединения с конференцией.");
+        return;
+      }
 
       if (msg.type === "history") {
-        const items = msg.items || [];
+        const items = Array.isArray(msg.items) ? msg.items : [];
         setOriginalLines(items);
         setOriginalPartial("");
+        setParticipants(normalizeParticipants(msg.participants));
+        setScreenShareActive(Boolean(msg.screen_share_active));
 
         if (!isOrganizer) {
           if (
@@ -357,28 +733,67 @@ export function ConferenceRoomPage() {
           ) {
             setTranslatedLines(msg.translated_items);
           } else {
-            const out = [];
+            const translated = [];
             for (const line of items) {
               try {
-                const tr = await translateSegment(line, srcLang, tgtLang);
-                out.push(tr.translated || "");
+                const result = await translateSegment(line, srcLang, tgtLang);
+                translated.push(result.translated || "");
               } catch {
-                out.push("");
+                translated.push("");
               }
             }
-            setTranslatedLines(out);
+            setTranslatedLines(translated);
           }
           setTranslatedPartial("");
         }
 
-        if (msg.is_active === false) setConfStatus("ended");
+        if (msg.is_active === false) {
+          setConfStatus("ended");
+        }
+        return;
+      }
+
+      if (msg.type === "peer_list" && isOrganizer) {
+        setParticipants(normalizeParticipants(msg.participants));
+        return;
+      }
+
+      if (msg.type === "participant_joined" && isOrganizer) {
+        const nextParticipantId = String(msg.participant_id || "").trim();
+        const nextParticipantName = String(msg.participant_name || "").trim() || "Участник";
+
+        if (!nextParticipantId) return;
+
+        setParticipants((prev) => {
+          if (prev.some((item) => item.client_id === nextParticipantId)) return prev;
+          return [
+            ...prev,
+            {
+              client_id: nextParticipantId,
+              display_name: nextParticipantName,
+            },
+          ];
+        });
+
+        if (localScreenStreamRef.current) {
+          try {
+            await sendOfferToParticipant(nextParticipantId);
+          } catch (error) {
+            console.error(error);
+          }
+        }
+        return;
+      }
+
+      if (msg.type === "participant_left" && isOrganizer) {
+        const leftId = String(msg.participant_id || "").trim();
+        setParticipants((prev) => prev.filter((item) => item.client_id !== leftId));
+        closePeerConnection(leftId);
         return;
       }
 
       if (msg.type === "caption_partial") {
-        const text = (msg.text || "").trim();
-        setOriginalPartial(text);
-
+        setOriginalPartial((msg.text || "").trim());
         if (!isOrganizer) {
           setTranslatedPartial((msg.translated || "").trim());
         }
@@ -396,12 +811,12 @@ export function ConferenceRoomPage() {
           if (typeof msg.translated === "string") {
             appendUniqueLine(setTranslatedLines, msg.translated || "");
             setTranslatedPartial((prev) =>
-              prev === (msg.translated || "") ? "" : prev
+              prev === (msg.translated || "") ? "" : prev,
             );
           } else {
             try {
-              const tr = await translateSegment(text, srcLang, tgtLang);
-              appendUniqueLine(setTranslatedLines, tr.translated || "");
+              const result = await translateSegment(text, srcLang, tgtLang);
+              appendUniqueLine(setTranslatedLines, result.translated || "");
               setTranslatedPartial("");
             } catch {
               appendUniqueLine(setTranslatedLines, "");
@@ -415,6 +830,80 @@ export function ConferenceRoomPage() {
         setConfStatus("ended");
         setOriginalPartial("");
         setTranslatedPartial("");
+        return;
+      }
+
+      if (msg.type === "screen_share_started") {
+        setScreenShareActive(true);
+        return;
+      }
+
+      if (msg.type === "screen_share_stopped") {
+        setScreenShareActive(false);
+        if (!isOrganizer) {
+          clearRemoteScreen();
+        }
+        return;
+      }
+
+      if (msg.type === "organizer_left") {
+        if (!isOrganizer) {
+          setScreenShareActive(false);
+          clearRemoteScreen();
+          setUiError("Организатор отключился от конференции.");
+        }
+        return;
+      }
+
+      if (msg.type === "webrtc_offer" && !isOrganizer) {
+        try {
+          closePeerConnection(msg.from_client_id);
+          const pc = ensurePeerConnection(msg.from_client_id);
+
+          await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+          await flushPendingIceCandidates(msg.from_client_id, pc);
+
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+
+          sendJson({
+            type: "webrtc_answer",
+            target_client_id: msg.from_client_id,
+            sdp: answer,
+          });
+        } catch (error) {
+          console.error(error);
+          setUiError("Не удалось принять демонстрацию экрана.");
+        }
+        return;
+      }
+
+      if (msg.type === "webrtc_answer" && isOrganizer) {
+        try {
+          const pc = ensurePeerConnection(msg.from_client_id);
+          await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+          await flushPendingIceCandidates(msg.from_client_id, pc);
+        } catch (error) {
+          console.error(error);
+        }
+        return;
+      }
+
+      if (msg.type === "webrtc_ice_candidate") {
+        try {
+          const pc = ensurePeerConnection(msg.from_client_id);
+
+          if (!pc.remoteDescription) {
+            queueIceCandidate(msg.from_client_id, msg.candidate);
+            return;
+          }
+
+          if (msg.candidate) {
+            await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+          }
+        } catch (error) {
+          console.error(error);
+        }
       }
     };
 
@@ -424,46 +913,35 @@ export function ConferenceRoomPage() {
       } catch {
         // ignore
       }
+      wsRef.current = null;
+      setSocketReady(false);
     };
-  }, [code, isOrganizer, srcLang, tgtLang]);
+  }, [code, isOrganizer, srcLang, tgtLang, currentDisplayName]);
 
   useEffect(() => {
     return () => {
       stopMic();
+      stopScreenShare(false);
+      clearRemoteScreen();
     };
   }, []);
 
   const toggleMic = () => {
     if (!isOrganizer) return;
-    if (micOn) stopMic();
-    else startMic();
-  };
-
-  const handleExit = () => {
-    if (isOrganizer) {
+    if (micOn) {
       stopMic();
-      navigate("/conferences");
-      return;
+    } else {
+      startMic();
     }
-    setConfStatus("ended");
-  };
-
-  const scrollByCards = (direction) => {
-    const container = listRef.current;
-    if (!container) return;
-    const cardWidth = 220;
-    container.scrollBy({
-      left: direction === "left" ? -cardWidth : cardWidth,
-      behavior: "smooth",
-    });
   };
 
   const doExport = (format) => {
-    const original_text = [...originalLines, originalPartial].filter(Boolean).join("\n");
-    const translated_text = [...translatedLines, translatedPartial]
+    const originalText = [...originalLines, originalPartial].filter(Boolean).join("\n");
+    const translatedText = [...translatedLines, translatedPartial]
       .filter(Boolean)
       .join("\n");
-    downloadExport(code, format, srcLang, tgtLang, original_text, translated_text);
+
+    downloadExport(code, format, srcLang, tgtLang, originalText, translatedText);
   };
 
   const handleSaveToSite = async () => {
@@ -472,265 +950,189 @@ export function ConferenceRoomPage() {
 
     try {
       setBusy(true);
-      const payload = {
-        title: `Конференция ${code} — ${title}`,
-        original_language: srcLang,
-        target_language: tgtLang,
-        original_text: [...originalLines, originalPartial].filter(Boolean).join("\n"),
-        translated_text: [...translatedLines, translatedPartial]
-          .filter(Boolean)
-          .join("\n"),
-      };
-      await createNote(payload, token);
+      await createNote(
+        {
+          title: `Конференция ${code} — ${title}`,
+          original_language: srcLang,
+          target_language: tgtLang,
+          original_text: [...originalLines, originalPartial].filter(Boolean).join("\n"),
+          translated_text: [...translatedLines, translatedPartial]
+            .filter(Boolean)
+            .join("\n"),
+        },
+        token,
+      );
       setUiSuccess("Сохранено в конспекты");
-    } catch (e) {
-      console.error(e);
-      setUiError(e.message || "Не удалось сохранить на сайте");
+    } catch (error) {
+      console.error(error);
+      setUiError(error?.message || "Не удалось сохранить на сайте");
     } finally {
       setBusy(false);
     }
   };
 
-  const goBackToList = () => navigate("/conferences");
-
   return (
-    <div className="page-inner room-page">
-      <h1 className="page-title">{title}</h1>
-
-      <div style={{ marginTop: -10, color: "#9ca3af" }}>
-        Код конференции: <b>{code}</b>
-      </div>
-
-      <div style={{ marginTop: 6, color: "#9ca3af" }}>
-        Вы: <b>{isOrganizer ? "организатор" : "участник"}</b>
-        {!isOrganizer && (
-          <>
-            {" "}
-            | перевод: <b>{langHuman(srcLang)} → {langHuman(tgtLang)}</b>
-          </>
-        )}
-      </div>
-
-      <div style={{ marginTop: 14 }}>
-        <button
-          className="conference-secondary-btn"
-          style={secondaryButtonStyle}
-          onClick={handleExit}
+    <div style={pageStyle}>
+      <section style={cardStyle}>
+        <div
+          style={{
+            display: "flex",
+            gap: 16,
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            flexWrap: "wrap",
+          }}
         >
-          {isOrganizer ? "Выйти" : "Выйти из конференции"}
-        </button>
-      </div>
-
-      {isOrganizer && confStatus === "active" && (
-        <div className="conference-card" style={{ marginTop: 18 }}>
-          <h2 style={{ marginTop: 0 }}>Управление конференцией</h2>
-          <p style={{ marginTop: -8, color: "#9ca3af" }}>
-            Включите микрофон. Субтитры будут идти в реальном времени с промежуточными обновлениями.
-          </p>
+          <div style={{ display: "grid", gap: 12 }}>
+            <h1 style={{ margin: 0, fontSize: 28, color: "#f8fafc" }}>{title}</h1>
+            <p style={mutedStyle}>
+              Код конференции: <strong style={{ color: "#e2e8f0" }}>{code}</strong>
+            </p>
+            <p style={mutedStyle}>
+              Роль: {isOrganizer ? "организатор" : "участник"}
+            </p>
+          </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button
-              className="conference-secondary-btn"
-              style={secondaryButtonStyle}
-              onClick={toggleMic}
-            >
-              {micOn ? "Микрофон: ВЫКЛ" : "Микрофон: ВКЛ"}
+            <button style={secondaryButtonStyle} onClick={() => doExport("docx")}>
+              Экспорт DOCX
             </button>
-
-            <button
-              className="conference-secondary-btn"
-              style={secondaryButtonStyle}
-              onClick={() => {
-                stopMic();
-                sendJson({ type: "end" });
-              }}
-            >
-              Завершить конференцию
+            <button style={secondaryButtonStyle} onClick={() => doExport("pdf")}>
+              Экспорт PDF
             </button>
-          </div>
-
-          <div style={{ marginTop: 10, color: "#9ca3af", fontSize: 13 }}>
-            Соединение: {socketReady ? "готово" : "подключение..."}
-          </div>
-        </div>
-      )}
-
-      {isOrganizer ? (
-        <div className="conference-card" style={{ marginTop: 18 }}>
-          <h2 style={{ marginTop: 0 }}>Участники конференции</h2>
-          <p style={{ marginTop: -8, color: "#9ca3af" }}>
-            Пока показывается только вы. Позже можно добавить presence через WebSocket.
-          </p>
-
-          <div style={{ color: "#9ca3af", fontSize: 13 }}>
-            Сейчас в конференции: {participants.length}
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
-            <button
-              className="conference-secondary-btn"
-              style={secondaryButtonStyle}
-              onClick={() => scrollByCards("left")}
-            >
-              ◀
-            </button>
-
-            <div
-              ref={listRef}
-              style={{
-                display: "flex",
-                gap: 12,
-                overflowX: "auto",
-                paddingBottom: 6,
-                scrollBehavior: "smooth",
-              }}
-            >
-              {participants.map((p) => (
-                <div
-                  key={p.id}
-                  style={{
-                    minWidth: 210,
-                    border: "1px solid rgba(148,163,184,0.25)",
-                    borderRadius: 14,
-                    padding: 12,
-                    background: "rgba(2,6,23,0.5)",
-                    display: "flex",
-                    gap: 10,
-                    alignItems: "center",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 999,
-                      overflow: "hidden",
-                      background: "#111827",
-                      border: "1px solid #4b5563",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {p.avatarUrl ? (
-                      <img
-                        src={p.avatarUrl}
-                        alt="avatar"
-                        style={{ width: "100%", height: "100%" }}
-                      />
-                    ) : (
-                      <span>{p.name?.[0]?.toUpperCase() ?? "?"}</span>
-                    )}
-                  </div>
-
-                  <div style={{ fontSize: 14 }}>{p.name}</div>
-                </div>
-              ))}
-            </div>
-
-            <button
-              className="conference-secondary-btn"
-              style={secondaryButtonStyle}
-              onClick={() => scrollByCards("right")}
-            >
-              ▶
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      <div className="notes-shell" style={{ marginTop: 18 }}>
-        <div className="notes-panel">
-          <div className="notes-panel-title">Оригинал</div>
-          <div className="notes-panel-subtitle">
-            {isOrganizer ? "Предпросмотр live-субтитров" : "STT организатора"}
-          </div>
-          <div className="notes-panel-body">
-            {originalLines.map((line, index) => (
-              <div key={index} className="notes-line">
-                {line}
-              </div>
-            ))}
-            {originalPartial && (
-              <div className="notes-line" style={{ opacity: 0.7, fontStyle: "italic" }}>
-                {originalPartial}
-              </div>
+            {!isOrganizer && (
+              <button
+                style={primaryButtonStyle}
+                onClick={handleSaveToSite}
+                disabled={busy}
+              >
+                Сохранить на сайте
+              </button>
             )}
-          </div>
-        </div>
-
-        {!isOrganizer && (
-          <div className="notes-panel">
-            <div className="notes-panel-title">Перевод</div>
-            <div className="notes-panel-subtitle">на ваш язык</div>
-            <div className="notes-panel-body">
-              {translatedLines.map((line, index) => (
-                <div key={index} className="notes-line">
-                  {line}
-                </div>
-              ))}
-              {translatedPartial && (
-                <div className="notes-line" style={{ opacity: 0.7, fontStyle: "italic" }}>
-                  {translatedPartial}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {uiError && (
-        <div className="conference-message conference-message_error" style={{ marginTop: 12 }}>
-          {uiError}
-        </div>
-      )}
-
-      {uiSuccess && (
-        <div className="conference-message conference-message_success" style={{ marginTop: 12 }}>
-          {uiSuccess}
-        </div>
-      )}
-
-      {!isOrganizer && confStatus === "ended" && (
-        <div className="conference-card" style={{ marginTop: 18 }}>
-          <h2 style={{ marginTop: 0 }}>Конференция завершена</h2>
-          <p style={{ marginTop: -8, color: "#9ca3af" }}>
-            Вы можете сохранить конспект или вернуться к списку конференций.
-          </p>
-
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button
-              className="conference-secondary-btn"
-              style={secondaryButtonStyle}
-              onClick={() => doExport("pdf")}
-            >
-              Сохранить PDF
-            </button>
-            <button
-              className="conference-secondary-btn"
-              style={secondaryButtonStyle}
-              onClick={() => doExport("docx")}
-            >
-              Сохранить DOCX
-            </button>
-            <button
-              className="conference-secondary-btn"
-              style={secondaryButtonStyle}
-              onClick={handleSaveToSite}
-              disabled={busy}
-            >
-              Сохранить на сайте
-            </button>
-            <button
-              className="conference-secondary-btn"
-              style={secondaryButtonStyle}
-              onClick={goBackToList}
-            >
+            <button style={secondaryButtonStyle} onClick={() => navigate("/conferences")}>
               Вернуться к конференциям
             </button>
           </div>
         </div>
+      </section>
+
+      {isOrganizer && (
+        <section style={cardStyle}>
+          <div style={{ display: "grid", gap: 12 }}>
+            <h2 style={panelTitleStyle}>Управление конференцией</h2>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button style={secondaryButtonStyle} onClick={toggleMic}>
+                {micOn ? "Микрофон: ВЫКЛ" : "Микрофон: ВКЛ"}
+              </button>
+              <button
+                style={screenShareActive ? dangerButtonStyle : primaryButtonStyle}
+                onClick={screenShareActive ? () => stopScreenShare() : startScreenShare}
+                disabled={screenShareBusy}
+              >
+                {screenShareActive ? "Остановить демонстрацию" : "Начать демонстрацию экрана"}
+              </button>
+              <button
+                style={dangerButtonStyle}
+                onClick={() => {
+                  stopMic();
+                  stopScreenShare();
+                  sendJson({ type: "end" });
+                }}
+              >
+                Завершить конференцию
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {screenShareActive && (
+        <section style={cardStyle}>
+          <div style={{ display: "grid", gap: 14 }}>
+            <h2 style={panelTitleStyle}>
+              {isOrganizer ? "Демонстрация организатора" : "Экран организатора"}
+            </h2>
+
+            <div style={videoWrapStyle}>
+              {isOrganizer ? (
+                <video
+                  ref={localPreviewRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  style={videoStyle}
+                />
+              ) : (
+                <video
+                  ref={remoteVideoRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  style={videoStyle}
+                />
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {isOrganizer && (
+        <section style={cardStyle}>
+          <div style={{ display: "grid", gap: 10 }}>
+            <h2 style={panelTitleStyle}>Участники конференции</h2>
+            {participants.length > 0 ? (
+              <div style={participantListStyle}>
+                {participants.map((item) => (
+                  <div key={item.client_id} style={participantRowStyle}>
+                    {item.display_name}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p style={mutedStyle}>Пока нет подключённых участников.</p>
+            )}
+          </div>
+        </section>
+      )}
+
+      <section
+        style={{
+          display: "grid",
+          gap: 16,
+          gridTemplateColumns: !isOrganizer ? "repeat(auto-fit, minmax(320px, 1fr))" : "1fr",
+        }}
+      >
+        <div style={cardStyle}>
+          <div style={subtitlesCardContentStyle}>
+            <h2 style={panelTitleStyle}>Субтитры</h2>
+            <div ref={originalListRef} style={listCardStyle}>
+              {renderSubtitleLines(originalLines, originalPartial)}
+            </div>
+          </div>
+        </div>
+
+        {!isOrganizer && (
+          <div style={cardStyle}>
+            <div style={subtitlesCardContentStyle}>
+              <h2 style={panelTitleStyle}>Перевод</h2>
+              <div ref={translatedListRef} style={listCardStyle}>
+                {renderSubtitleLines(translatedLines, translatedPartial)}
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {uiError && (
+        <section style={{ ...cardStyle, border: "1px solid rgba(248, 113, 113, 0.28)" }}>
+          <p style={{ margin: 0, color: "#fecaca" }}>{uiError}</p>
+        </section>
+      )}
+
+      {uiSuccess && (
+        <section style={{ ...cardStyle, border: "1px solid rgba(74, 222, 128, 0.28)" }}>
+          <p style={{ margin: 0, color: "#bbf7d0" }}>{uiSuccess}</p>
+        </section>
       )}
     </div>
   );

@@ -297,10 +297,6 @@ export function UploadsPage() {
               background: "rgba(2,6,23,0.34)",
             }}
           >
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ color: "#9ca3af", fontSize: 13 }}>Задача</div>
-              <div style={{ fontWeight: 700 }}>#{jobId}</div>
-            </div>
 
             <div style={{ display: "grid", gap: 10 }}>
               <div>

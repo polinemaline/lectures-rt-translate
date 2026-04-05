@@ -21,6 +21,12 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+    new_password_confirm: str
+
+
 class UserOut(BaseModel):
     id: int
     email: EmailStr
@@ -124,3 +130,40 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="User not found")
 
     return user
+
+
+@router.post("/change-password")
+async def change_password(
+    payload: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if payload.new_password != payload.new_password_confirm:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Новые пароли не совпадают",
+        )
+
+    if len(payload.new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Новый пароль должен содержать минимум 6 символов",
+        )
+
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Текущий пароль указан неверно",
+        )
+
+    if payload.current_password == payload.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Новый пароль должен отличаться от текущего",
+        )
+
+    current_user.password_hash = hash_password(payload.new_password)
+    session.add(current_user)
+    await session.commit()
+
+    return {"message": "Пароль успешно изменён"}

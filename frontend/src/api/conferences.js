@@ -8,16 +8,31 @@ function apiUrl(path) {
   return `${API_BASE}${path}`;
 }
 
-export async function createConference(title) {
+function authHeaders(token) {
+  const normalized = String(token || "").trim();
+  if (!normalized) {
+    return {};
+  }
+
+  return {
+    Authorization: normalized.startsWith("Bearer ")
+      ? normalized
+      : `Bearer ${normalized}`,
+  };
+}
+
+export async function createConference(title, token) {
   return await apiFetch("/api/conferences/create", {
     method: "POST",
+    headers: authHeaders(token),
     body: JSON.stringify({ title }),
   });
 }
 
-export async function joinConference(code) {
+export async function joinConference(code, token) {
   return await apiFetch("/api/conferences/join", {
     method: "POST",
+    headers: authHeaders(token),
     body: JSON.stringify({ code }),
   });
 }
@@ -26,6 +41,7 @@ export function conferenceWsUrl(code) {
   const base = API_BASE || window.location.origin;
   const url = new URL(base);
   const protocol = url.protocol === "https:" ? "wss:" : "ws:";
+
   return `${protocol}//${url.host}/api/conferences/${encodeURIComponent(code)}/ws`;
 }
 
@@ -43,8 +59,10 @@ export function defaultIceServers() {
 
   if (turnUrl) {
     const turnServer = { urls: turnUrl };
+
     if (turnUsername) turnServer.username = turnUsername;
     if (turnCredential) turnServer.credential = turnCredential;
+
     servers.push(turnServer);
   }
 
